@@ -1,0 +1,160 @@
+This is Schmalz, the Z-Machine component of Erlkoenig, the Erlang Interactive
+Fiction system..
+
+V5, V8 Status:
+--------------
+
+- dictionary works
+- unpack_address
+- object table works
+
+TODO:
+
+V4 Status:
+----------
+
+- dictionary works
+- unpack_address
+- object table works
+
+2OP:
+- call_2s
+
+1OP:
+0OP:
+VAR:
+
+TODO:
+
+- screen model
+  - @split_winndow
+  - @erase_window
+- streams
+
+- instructions
+
+1OP:
+- call_1s
+
+0OP:
+- save (changed behaviour)
+- restore (changed behaviour)
+
+VAR:
+- sread (has timed input)
+- call_vs2
+- erase_window
+- erase_line
+- set_cursor
+- get_cursor
+- set_text_style
+- buffer_mode
+- read_char
+- scan_table
+
+V3 Status:
+----------
+
+VAR:
+
+- call
+- print_char
+- print_num
+- push
+- pull
+- put_prop
+- random
+- sound_effect
+- sread
+- storeb
+- storew
+
+
+2OP:
+
+- add
+- and
+- clear_attr
+- dec_chk
+- div
+- get_next_prop
+- get_prop
+- get_prop_addr
+- inc_chk
+- insert_obj
+- je
+- jg
+- jin
+- jl
+- loadb
+- loadw
+- mod
+- mul
+- or
+- set_attr
+- store
+- sub
+- test
+- test_attr
+
+1OP:
+
+- dec
+- get_child
+- get_parent
+- get_prop_len
+- get_sibling
+- inc
+- jump
+- jz
+- load
+- not
+- print_addr
+- print_obj
+- print_paddr
+- remove_obj
+- ret
+
+0OP:
+
+- new_line
+- nop
+- piracy
+- pop
+- print
+- print_ret
+- quit
+- ret_popped
+- rfalse
+- rtrue
+- show_status
+- verify
+
+---------------------
+
+TODO:
+
+VAR
+
+- split_window
+- set_window
+- output_stream
+- input_stream
+
+0OP
+
+- save
+- restore
+- restart
+---------------------
+Thoughts:
+
+- Smeagol should use blocks to execute instruction code
+- Both ZMPP and Smeagol should have the address after the branch data
+  available instead of the address after the instruction (they probably don't)
+- instruction form is only needed at decoding time
+- probably ZMPP and Smeagol make mistakes when AND-ing values
+- all stores to variables and memory should be truncated
+- Smeagol contains an error which seems to make the stack confused
+- tokenization conceptually belongs to Dictionary (change in ZMPP and Smeagol)
+
