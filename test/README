@@ -1,0 +1,7 @@
+This is the unit test suite for Schmalz, ensure to have EUnit in the
+code path to use it and type
+
+make test
+
+run the suite
+

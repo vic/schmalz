@@ -54,9 +54,7 @@
 -export([read_file/1,
 	 version/1, object_table_address/1, dictionary_address/1,
 	 global_var_address/1, abbrev_address/1, initial_pc/1,
-	 unpack_address/2,
-	 get_byte/2, get_word16/2, get_word32/2,
-         set_byte/3, set_word16/3, set_word32/3,
+	 unpack_address/2, get_byte/2, get_word16/2, set_byte/3, set_word16/3,
 	 get_bytes/3, copy_string_to_address/3]).
 
 % Fixed offsets
@@ -134,29 +132,27 @@ copy_string_to_address(Memory, Address, [Character|String]) ->
 get_bytes(Memory, ByteNum, NumBytes) ->
     <<_:ByteNum/binary, Result:NumBytes/binary, _/binary>> = Memory, Result.
 
-%% @spec set_word32(binary(), int(), int()) -> binary().
-set_word32(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 32, Value).
+%% @spec get_word16(binary(), int()) -> int().
+get_word16(Memory, ByteNum) -> get_bits(Memory, ByteNum, 16).
 
 %% @spec set_word16(binary(), int(), int()) -> binary().
 set_word16(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 16, Value).
 
+%% @spec get_byte(binary(), int()) -> int().
+get_byte(Memory, ByteNum) -> get_bits(Memory, ByteNum, 8).
+
 %% @spec set_byte(binary(), int(), int()) -> binary().
 set_byte(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 8, Value).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Private
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Sets the Value at the specified byte position
 %% @spec set_bits(binary(), int(), int(), int()) -> binary().
 set_bits(Memory, ByteNum, NumBits, Value) ->
     <<Start:ByteNum/binary, _:NumBits, End/binary>> = Memory,
     <<Start:ByteNum/binary, Value:NumBits, End/binary>>.
-
-%% @spec get_byte(binary(), int()) -> int().
-get_byte(Memory, ByteNum) -> get_bits(Memory, ByteNum, 8).
-
-%% @spec get_word16(binary(), int()) -> int().
-get_word16(Memory, ByteNum) -> get_bits(Memory, ByteNum, 16).
-
-%% @spec get_word32(binary(), int()) -> int().
-get_word32(Memory, ByteNum) -> get_bits(Memory, ByteNum, 32).
 
 % Returns the value with the specified number of bits from the binary
 %% @spec get_bits(binary(), int(), int()) -> int().
