@@ -29,7 +29,7 @@
 -export([test_all/0]).
 
 minizork_memory_test() ->
-  Memory = memory:read_file("../core/testfiles/minizork.z3"),
+  Memory = memory:read_file("../testfiles/minizork.z3"),
   ?assertMatch(3, memory:version(Memory)),
   ?assertMatch(1234 * 2, memory:unpack_address(Memory, 1234)),
   ?assertMatch(16#03c6, memory:object_table_address(Memory)),

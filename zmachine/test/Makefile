@@ -10,7 +10,7 @@ CFLAGS = #-DDEBUG
 .yrl.erl:
 	erlc -W $<
 
-ERL = erl -boot start_clean -pa ../core
+ERL = erl -boot start_clean -pa ../src
 
 MODS = memory_test encoding_test
 

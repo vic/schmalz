@@ -23,7 +23,7 @@ compile: ${MODS:%=%.beam} subdirs
 subdirs:
 
 main: compile
-	${ERL} -noshell -s main main -storyfile testfiles/minizork.z3
+	${ERL} -noshell -s main main -storyfile ../testfiles/minizork.z3
 
 clean:
 	rm -rf *.beam erl_crash.dump
