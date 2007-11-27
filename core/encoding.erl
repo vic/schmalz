@@ -24,13 +24,20 @@
 %%%   decodes the encoded ZSCII string at the specified address
 %%%   MaxAddress specifies the maximum address for dictionary entries
 %%%
-%%% strlen(Memory, Address)
+%%% num_zencoded_bytes(Memory, Address)
 %%%   determine the length of the string at the specified address in bytes
+%%%
+%%% is_space(Character)
+%%%   determine if a given characser is a space character in ZSCII
+%%%
+%%% ord(Character)
+%%%   returns an ordinal number for a specific character, used to correctly
+%%%   perform binary searches in the dictionary
 %%%
 %%%-----------------------------------------------------------------------
 -module(encoding).
 -vsn('1.0').
--export([decode_address/3, strlen/2, is_space/1, ord/1]).
+-export([decode_address/3, num_zencoded_bytes/2, is_space/1, ord/1]).
 -include("include/zscii.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -48,19 +55,25 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public interface
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% decodes the encoded ZSCII sequence at the specified address
-% if MaxAddress is not "undef", a length check will be performed
+%% decodes the encoded ZSCII sequence at the specified address
+%% if MaxAddress is not "undef", a length check will be performed
+%% @spec decode_address(binary(), int(), int()) -> string().
 decode_address(Memory, Address, MaxAddress) ->
     decode_list(extract_list(Memory, Address, MaxAddress), Memory).
 
-strlen(Memory, Address) ->
+%% Determine the number of bytes the Z-encoded string at the specified address
+%% occupies.
+%% @spec num_zencoded_bytes(binary(), int()) -> int().
+num_zencoded_bytes(Memory, Address) ->
     <<Bit:1, _First:5, _Second:5, _Third:5>> =
 	memory:get_bytes(Memory, Address, 2),
     if
 	Bit =:= 1 -> 2;
-	Bit =:= 0 -> 2 + strlen(Memory, Address + 2)
+	Bit =:= 0 -> 2 + num_zencoded_bytes(Memory, Address + 2)
     end.
 
+%% Returns true if Char is a valid space character in ZSCII, false otherwise
+%% @spec is_space(int()) -> bool().
 is_space(Char) -> Char =:= ?SPACE.
 
 %% The standard dictionary entries are ordered in Z encoding order,

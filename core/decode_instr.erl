@@ -85,7 +85,7 @@ decode_short(MachinePid, Address, Version) ->
     {Params, ZsciiLength} = if
 	IsPrint ->
 	    Str = ?call_machine({decode_address, Address + 1, undef}),
-	    {[{zscii, Str}], ?call_machine({strlen, Address + 1})};
+	    {[{zscii, Str}], ?call_machine({num_zencoded_bytes, Address + 1})};
         true ->
 	    {[{OperandType, get_operand_at(MachinePid, Address + 1,
 					   OperandType)}], 0}

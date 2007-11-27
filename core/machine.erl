@@ -125,8 +125,8 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	{From, {decode_address, Address, MaxAddress}} ->
 	    ack(From, encoding:decode_address(Memory, Address, MaxAddress)),
 	    listen(MachineState0);
-	{From, {strlen, Address}} ->
-	    ack(From, encoding:strlen(Memory, Address)),
+	{From, {num_zencoded_bytes, Address}} ->
+	    ack(From, encoding:num_zencoded_bytes(Memory, Address)),
 	    listen(MachineState0);
 	{From, {print_zscii, ZsciiString}} ->
 	    MachineState1 = print_zscii(MachineState0, ZsciiString),

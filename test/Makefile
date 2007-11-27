@@ -12,7 +12,7 @@ CFLAGS = #-DDEBUG
 
 ERL = erl -boot start_clean -pa ../core
 
-MODS = memory_test
+MODS = memory_test encoding_test
 
 all: compile
 
@@ -20,6 +20,7 @@ compile: ${MODS:%=%.beam}
 
 test: compile
 	${ERL} -noshell -s memory_test test_all
+	${ERL} -noshell -s encoding_test test_all
 
 clean:
 	rm -rf *.beam erl_crash.dump
