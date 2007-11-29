@@ -14,20 +14,21 @@
 %%% along with Schmalz.  If not, see <http://www.gnu.org/licenses/>.
 
 %%%-----------------------------------------------------------------------
-%%% Description of module main
+%%% Description of module glulx_main
 %%%-----------------------------------------------------------------------
-%%% This module controls the Z-Machine execution
 %%%-----------------------------------------------------------------------
 %%% Exports
 %%%-----------------------------------------------------------------------
 %%%
 %%%-----------------------------------------------------------------------
--module(main).
+
+-module(glulx_main).
 -export([main/0]).
+-include("include/glulx.hrl").
 
 -ifdef(DEBUG).
 -define(print_instruction(Instruction),
-	instruction:print_instr(Instruction, Num)).
+	glulx_instr:print_instr(Instruction, Num)).
 -else.
 -define(print_instruction(Instruction), void).
 -endif.
@@ -39,7 +40,7 @@
 % The main method
 main() ->
   {ok, [[StoryFile]]} = init:get_argument(storyfile),
-  io:fwrite("Schmalz (Z-machine, Story: ~s) Copyright (C) 2007 Wei-ju Wu~n"
+  io:fwrite("Schmalz (Glulx, Story: ~s) Copyright (C) 2007 Wei-ju Wu~n"
 	    "This program comes with ABSOLUTELY NO WARRANTY; "
 	    "for details type `show w'.~n"
 	    "This is free software, and you are welcome to redistribute it~n"
@@ -48,34 +49,20 @@ main() ->
   start(StoryFile),
 	init:stop().
 
-% starts the Z-machine with the specified story file
+% starts the Glulx-VM with the specified story file
 start(Filename) ->
-    MachinePid = machine:create(memory:read_file(Filename)),
+    MachinePid = glulx_vm:create(glulx_mem:read_file(Filename)),
     run(MachinePid, 1).
 
 run(MachinePid, Num) ->
-    Status = machine:rpc(MachinePid, status),
+    Status = ?call_machine(status),
     if
         Status =:= halt -> halt;
-	Status =:= sread ->
-            machine:rpc(MachinePid, update_status_line),
-	    % flush the output buffer
-            Output = machine:rpc(MachinePid, get_screen),
-            io:fwrite(Output),	    
-	    Input = io:get_line(' '),
-	    Input2 = string:substr(Input, 1, string:len(Input) - 1),
-	    machine:rpc(MachinePid, {send_input, Input2}),
-	    % decode and execute again
-            Instruction = decode_instr:get_instruction(MachinePid),
-            ?print_instruction(Instruction),
-            instruction:execute(Instruction, MachinePid),
-	    run(MachinePid, Num);
         true ->
-            Instruction = decode_instr:get_instruction(MachinePid),
+            Instruction = glulx_decode_instr:decode(MachinePid),
             ?print_instruction(Instruction),
-            instruction:execute(Instruction, MachinePid),
+            glulx_instr:execute(MachinePid, Instruction),
 	    %machine:print(NewMachineState),
 	    %io:fwrite("\n"),
 	    run(MachinePid, Num + 1)
     end.
-

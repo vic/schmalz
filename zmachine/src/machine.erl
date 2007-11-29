@@ -30,7 +30,7 @@
 %%%   creates a new MachineState object
 %%%-----------------------------------------------------------------------
 -module(machine).
--export([create/1, listen/1, rpc/2,
+-export([create/1, rpc/2,
 	 print/1, print_locals/1, dump_input_buffer/1]).
 -record(machine_state, {memory, value_stack, call_stack, pc, streams, status}).
 -record(routine, {start_address, return_address, invocation_sp, local_vars,
@@ -42,10 +42,12 @@
 -define(trunc16(Value), Value band 2#1111111111111111).
 
 % creates a new MachineState object from the specified Memory object
-create(Memory) -> #machine_state {memory = Memory, value_stack = [],
-				  call_stack = [],
-				  pc = memory:initial_pc(Memory),
-				  streams = streams:create(), status = run}.
+create(Memory) ->
+    MachineState = #machine_state {memory = Memory, value_stack = [],
+				   call_stack = [],
+				   pc = memory:initial_pc(Memory),
+				   streams = streams:create(), status = run},
+    spawn(fun() -> listen(MachineState) end).
 
 rpc(MachinePid, Message) ->
     MachinePid ! {self(), Message},
