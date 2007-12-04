@@ -29,6 +29,9 @@
 decode(MachinePid) ->
     Address = ?call_machine(pc),
     First = ?get_byte(Address),
+    %Masked = First band 2#11000000,
+    %io:format("byte at $~8.16.0B: ~w, masked: ~16.2.0B~n",
+	%      [Address, First, Masked]),
     case First band 2#11000000 of
 	2#11000000 ->
 	    OpNumLen = 4,
@@ -36,7 +39,7 @@ decode(MachinePid) ->
 	2#10000000 ->
 	    OpNumLen = 2,
 	    OpcodeNum = ?get_word16(Address) - 16#8000;
-	2#00000000 ->
+	_Default ->
 	    OpNumLen = 1,
 	    OpcodeNum = First
     end,
@@ -44,7 +47,7 @@ decode(MachinePid) ->
 						  Address + OpNumLen,
 						  OpcodeNum),
     #instr{opcode = OpcodeNum, operands = Operands, address = Address,
-	   length = OpNumLen + OperandDataSize}.
+	   opnum_len = OpNumLen, length = OpNumLen + OperandDataSize}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Helper fuctionality
@@ -52,23 +55,37 @@ decode(MachinePid) ->
 
 decode_operands(MachinePid, Address, OpcodeNum) ->
     NumOperands = case OpcodeNum of
-	?CALL -> 3;
+	?BITAND  -> 3;
+	?CALL    -> 3;
+	?COPY    -> 2;
+	?CALLFI  -> 3;
+	?CALLFII -> 4;
+	?JEQ     -> 3;
+	?JLT     -> 3;
+	?JNE     -> 3;
+	?JUMP    -> 1;
+	?NOP     -> 0;
+	?SUB     -> 3;
 	_Default ->
-	    io:format("unknown opcode: ~w~n", [OpcodeNum])
+	    io:format("unknown opcode at $~8.16.0B: #$~2.16.0B~n",
+		      [Address, OpcodeNum])
     end,
     AddrModes = decode_operand_addr_modes(MachinePid, Address, NumOperands),
     AddrModesLength = (length(AddrModes) div 2) + (length(AddrModes) rem 2),
+    io:format("AddrModes: ~w~n", [AddrModes]),
     {AddrModesLength + operand_data_length(AddrModes),
      get_operands(MachinePid, Address + AddrModesLength, AddrModes)}.
 
 -define(is_constant(AddrMode), AddrMode > 0, AddrMode =< 3).
+-define(is_local(AddrMode), AddrMode >= 9, AddrMode =< 11).
 -define(ADDRMODE_ZERO, 0).
 -define(ADDRMODE_STACK_TOP, 8).
 
 operand_data_length([]) -> 0;
 operand_data_length([AddrMode | AddrModes]) ->
-    if 
-	AddrMode =:= ?ADDRMODE_ZERO; AddrMode =:= ?ADDRMODE_STACK_TOP ->
+    if
+	AddrMode =:= ?ADDRMODE_ZERO;
+	AddrMode =:= ?ADDRMODE_STACK_TOP ->
 	    operand_data_length(AddrModes);
 	AddrMode =:= 1; AddrMode =:= 5;
 	AddrMode =:= 9; AddrMode =:= 13  ->
@@ -86,18 +103,33 @@ get_operands(_MachinePid, _Address, []) -> [];
 get_operands(MachinePid, Address, [?ADDRMODE_ZERO | AddrModes]) ->
     [ {const, 0} | get_operands(MachinePid, Address, AddrModes) ];
 get_operands(MachinePid, Address, [?ADDRMODE_STACK_TOP | AddrModes]) ->
-    [ {stack_top, undef} | get_operands(MachinePid, Address, AddrModes) ];
+    [ {stack, undef} | get_operands(MachinePid, Address, AddrModes) ];
 get_operands(MachinePid, Address, [AddrMode | AddrModes])
   when ?is_constant(AddrMode) ->
     case AddrMode of
 	1 ->
-	    [{const, ?get_byte(Address)} |
+	    [{const, ?get_signed_byte(Address)} |
 	     get_operands(MachinePid, Address + 1, AddrModes)];
 	2 ->
-	    [{const, ?get_word16(Address)} |
+	    [{const, ?get_signed_word16(Address)} |
 	     get_operands(MachinePid, Address + 2, AddrModes)];
 	3 ->
 	    [{const, ?get_word32(Address)} |
+	     get_operands(MachinePid, Address + 4, AddrModes)];
+	_Default ->
+	    undef
+    end;
+get_operands(MachinePid, Address, [AddrMode | AddrModes])
+  when ?is_local(AddrMode) ->
+    case AddrMode of
+	9  ->
+	    [{local, ?get_byte(Address)} |
+	     get_operands(MachinePid, Address + 1, AddrModes)];
+	10 ->
+	    [{local, ?get_word16(Address)} |
+	     get_operands(MachinePid, Address + 2, AddrModes)];
+	11 ->
+	    [{local, ?get_word32(Address)} |
 	     get_operands(MachinePid, Address + 4, AddrModes)];
 	_Default ->
 	    undef

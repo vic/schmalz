@@ -22,12 +22,30 @@
 -record(glulx_header, {magic_number, version, ram_start, ext_start, end_mem, 
 		       stack_size, start_func, decode_table, checksum}).
 
--define(CALL, 16#30).
+-define(BITAND,   16#18).
+-define(CALL,     16#30).
+-define(CALLFI,   16#161).
+-define(CALLFII,  16#162).
+-define(CALLFIII, 16#163).
+-define(COPY,     16#40).
+-define(JEQ,      16#24).
+-define(JLT,      16#26).
+-define(JNE,      16#25).
+-define(JUMP,     16#20).
+-define(NOP,      16#00).
+-define(SUB,      16#11).
 
--record(instr, {opcode, operands, address, length}).
+-record(instr, {opcode, operands, address, opnum_len, length}).
 
 -define(call_machine(Message), glulx_vm:rpc(MachinePid, Message)).
 -define(get_byte(Address), glulx_vm:rpc(MachinePid, {get_byte, Address})).
 -define(get_word16(Address), glulx_vm:rpc(MachinePid, {get_word16, Address})).
 -define(get_word32(Address), glulx_vm:rpc(MachinePid, {get_word32, Address})).
+-define(get_signed_byte(Address), glulx_util:unsigned_to_signed8(
+				    glulx_vm:rpc(MachinePid,
+						 {get_byte, Address}))).
+-define(get_signed_word16(Address), glulx_util:unsigned_to_signed16(
+				      glulx_vm:rpc(MachinePid,
+						   {get_word16, Address}))).
+-define(pop(), glulx_vm:rpc(MachinePid, pop)).
 

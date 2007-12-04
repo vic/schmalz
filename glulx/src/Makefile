@@ -12,7 +12,7 @@ CFLAGS = -DDEBUG
 
 ERL = erl -boot start_clean
 
-MODS = glulx_mem glulx_vm glulx_decode_instr glulx_instr glulx_main
+MODS = glulx_mem glulx_util glulx_vm glulx_decode_instr glulx_instr glulx_main
 
 all: compile
 

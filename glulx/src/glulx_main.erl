@@ -62,7 +62,5 @@ run(MachinePid, Num) ->
             Instruction = glulx_decode_instr:decode(MachinePid),
             ?print_instruction(Instruction),
             glulx_instr:execute(MachinePid, Instruction),
-	    %machine:print(NewMachineState),
-	    %io:fwrite("\n"),
 	    run(MachinePid, Num + 1)
     end.
