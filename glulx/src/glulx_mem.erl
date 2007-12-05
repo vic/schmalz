@@ -33,7 +33,8 @@
 %%%-----------------------------------------------------------------------
 
 -module(glulx_mem).
--export([read_file/1, header/1, get_byte/2, get_word16/2, get_word32/2]).
+-export([read_file/1, header/1, memsize/1,
+	 get_byte/2, get_word16/2, get_word32/2]).
 -include("include/glulx.hrl").
 
 %% reads the game from the specified file and returns a Memory object
@@ -49,9 +50,13 @@ read_file(Filename) ->
 	end,
     {BaseMemory, ExtMemory}.
 
-% Extract the Glulx header information
-% @spec header(GlulxMemory()) -> record().
+%% Extract the Glulx header information
+%% @spec header(GlulxMemory()) -> record().
 header({BaseMemory, _ExtMemory}) -> header_private(BaseMemory).
+
+%% Returns the size of total memory.
+%% @spec memsize(GlulxMem()) -> int().
+memsize({BaseMemory, ExtMemory}) -> size(BaseMemory) + size(ExtMemory).
 
 %% Returns the byte at the specified address
 %% @spec get_byte(GlulxMemory(), int()) -> int().

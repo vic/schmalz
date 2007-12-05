@@ -30,6 +30,10 @@
 		     locals}).
 -record(glulx_vm, {memory, call_stack, value_stack, pc, status}).
 
+% Function types
+-define(ARGS_STACK,  192).
+-define(ARGS_LOCALS, 193).
+
 % Destination types for function calls
 -define(DO_NOT_STORE,         0).
 -define(STORE_IN_MAIN_MEMORY, 1).
@@ -81,15 +85,18 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    MachineState1 = call(MachineState0, Address, NumParams,
 				 ReturnAddress, ResultSpec),
 	    listen(MachineState1);
-	{From, {callf, Address, Params, ReturnAddress, ResultSpec}} ->
+	{From, {callf, Address, Args, ReturnAddress, ResultSpec}} ->
 	    ack(From, ok),
-	    MachineState1 = callf(MachineState0, Address, Params,
+	    MachineState1 = callf(MachineState0, Address, Args,
 				  ReturnAddress, ResultSpec),
 	    listen(MachineState1);
 	{From, {return_from_call, Result}} ->
 	    ack(From, ok),
 	    MachineState1 = return_from_call(MachineState0, Result),
 	    listen(MachineState1);
+	{From, memsize} ->
+	    ack(From, glulx_mem:memsize(Memory)),
+	    listen(MachineState0);
 	{From, {get_byte, Address}} ->
 	    ack(From, glulx_mem:get_byte(Memory, Address)),
 	    listen(MachineState0);
@@ -108,8 +115,8 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    listen(MachineState0);
 	{From, {store_value, Value, Dest}} ->
 	    MachineState1 = store_value(MachineState0, Value, Dest),
-	    [CallFrame | CallStack] = MachineState1#glulx_vm.call_stack,
-	    io:format("CallFrame after: ~p~n", [CallFrame]),
+	    %[CallFrame|_] = MachineState1#glulx_vm.call_stack,
+	    %io:format("CallFrame after: ~p~n", [CallFrame]),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, Other} ->
@@ -119,35 +126,83 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 
 ack(Pid, Message) -> Pid ! {self(), Message}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Function calls
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Call where arguments are on the stack
-call(#glulx_vm{memory = Memory, value_stack = ValueStack,
-	       call_stack = CallStack}
-     = MachineState0, Address, NumParams, ReturnAddress, ResultSpec) ->
-    Params = lists:sublist(ValueStack, NumParams),
+call(MachineState0, Address, NumParams, ReturnAddress, ResultSpec) ->
+    {Args, MachineState1} = pop_stack_values(MachineState0, NumParams),
+    CallFrame = decode_function(MachineState1#glulx_vm.memory, Address,
+				length(MachineState1#glulx_vm.value_stack),
+				ReturnAddress, ResultSpec),
+    MachineState2 = push_call_frame(MachineState1, CallFrame, Address),
+    copy_args(MachineState2, Args).
+
+%% Pops the specicfied number of elements from the stack.
+%% @spec pop_stack_values(glulx_vm(), int()) -> {[int()], glulx_vm()}.
+pop_stack_values(#glulx_vm{value_stack = ValueStack} = MachineState0,
+		 NumValues) ->
+    Values = lists:sublist(ValueStack, NumValues),
     if
-	length(Params) > 0 ->
-	    NewStack = lists:sublist(ValueStack, NumParams + 1,
-				     length(ValueStack) - NumParams);
+	length(Values) > 0 ->
+	    NewStack = lists:sublist(ValueStack, NumValues + 1,
+				     length(ValueStack) - NumValues);
 	true ->
 	    NewStack = ValueStack
     end,
-    CallFrame = decode_function(Memory, Address, length(NewStack),
+    {Values, MachineState0#glulx_vm{value_stack = NewStack}}.
+    
+%% Call with explicit arguments
+callf(#glulx_vm{memory = Memory, value_stack = ValueStack} = MachineState0,
+      Address, Args, ReturnAddress, ResultSpec) ->
+    CallFrame = decode_function(Memory, Address, length(ValueStack),
 				ReturnAddress, ResultSpec),
-    io:format("CALL, CALL_FRAME at $~8.16.0B: ~p~n", [Address, CallFrame]),
+    MachineState1 = push_call_frame(MachineState0, CallFrame, Address),
+    MachineState2 = copy_args(MachineState1, Args),
+    #glulx_vm{call_stack = [CallFrame2 | _], value_stack = ValueStack2}
+	= MachineState2,
+    io:format("@callf with CallFrame: ~p Stack: ~p~n",
+	      [CallFrame2, ValueStack2]),
+    MachineState2.
+
+%% Push a call frame on the call stack and sets the pc to the target address
+%% @spec push_call_frame(glulx_vm(), call_frame(), int()) -> glulx_vm().
+push_call_frame(#glulx_vm{call_stack = CallStack} = MachineState0, CallFrame,
+		Address) -> 
     MachineState0#glulx_vm{pc = Address + function_offset(CallFrame),
 			   call_stack = [CallFrame | CallStack]}.
 
-%% Call with explicit arguments
-callf(#glulx_vm{memory = Memory, call_stack = CallStack,
-		value_stack = ValueStack}
-      = MachineState0, Address, Params, ReturnAddress, ResultSpec) ->
-    CallFrame = decode_function(Memory, Address, length(ValueStack),
-				ReturnAddress, ResultSpec),
-    io:format("CALLF, CALL_FRAME at $~8.16.0B: ~p~n", [Address, CallFrame]),
-    MachineState0#glulx_vm{pc = Address + function_offset(CallFrame),
-			   call_stack = [CallFrame | CallStack],
-			   value_stack = [length(Params) |
-					  Params ++ ValueStack]}.
+%% Depending on the function type, the parameters are either pushed
+%% on the stack or set to the locals
+%% @spec copy_arguments(glulx_vm(), int[]) -> glulx_vm().
+copy_args(#glulx_vm{call_stack = [#call_frame{type = ?ARGS_STACK}|_ ],
+		    value_stack = ValueStack} = MachineState0,
+	  Args) ->
+    MachineState0#glulx_vm{value_stack = [length(Args) | Args ++ ValueStack]};
+copy_args(#glulx_vm{call_stack = [#call_frame{type = ?ARGS_LOCALS,
+					      locals = Locals} = CallFrame
+				  | CallStack ]} = MachineState0,
+	  Args) ->
+    MachineState0#glulx_vm{call_stack =
+			   [CallFrame#call_frame{
+			      locals = set_args_to_locals(
+					 Locals, Args)}
+			    | CallStack ]}.
+
+%% Sets the specified argument list to the current call frames locals list.
+%% @spec set_args_to_locals({int(), int()}[], int[]) -> {int(), int()}[].
+set_args_to_locals([], _Args) -> [];
+set_args_to_locals(Locals, []) -> Locals;
+set_args_to_locals([{4, _} | Locals], [Arg | Args]) ->
+    [{4, Arg band 16#ffffffff}] ++ set_args_to_locals(Locals, Args);
+set_args_to_locals([{2, _} | Locals], [Arg | Args]) ->
+    [{2, Arg band 16#ffff}] ++ set_args_to_locals(Locals, Args);
+set_args_to_locals([{1, _} | Locals], [Arg | Args]) ->
+    [{1, Arg band 16#ff}] ++ set_args_to_locals(Locals, Args).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% Return from call
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 return_from_call(#glulx_vm{call_stack = [CallFrame | CallStack],
 			   value_stack = ValueStack}

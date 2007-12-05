@@ -55,19 +55,25 @@ decode(MachinePid) ->
 
 decode_operands(MachinePid, Address, OpcodeNum) ->
     NumOperands = case OpcodeNum of
-	?BITAND  -> 3;
-	?CALL    -> 3;
-	?COPY    -> 2;
-	?CALLFI  -> 3;
-	?CALLFII -> 4;
-	?JEQ     -> 3;
-	?JLT     -> 3;
-	?JNE     -> 3;
-	?JUMP    -> 1;
-	?NOP     -> 0;
-	?SUB     -> 3;
-	_Default ->
-	    io:format("unknown opcode at $~8.16.0B: #$~2.16.0B~n",
+	?ALOAD      -> 3;
+	?ALOADB     -> 3;
+	?BITAND     -> 3;
+	?CALL       -> 3;
+	?COPY       -> 2;
+	?CALLFI     -> 3;
+	?CALLFII    -> 4;
+	?GETMEMSIZE -> 1;
+	?JEQ        -> 3;
+	?JGEU       -> 3;
+	?JGT        -> 3;
+	?JLT        -> 3;
+	?JNE        -> 3;
+	?JUMP       -> 1;
+	?NOP        -> 0;
+	?SUB        -> 3;
+	?RETURN     -> 1;
+	_Default    ->
+	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
 		      [Address, OpcodeNum])
     end,
     AddrModes = decode_operand_addr_modes(MachinePid, Address, NumOperands),
