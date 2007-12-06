@@ -59,6 +59,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?ALOAD        -> 3;
 	?ALOADB       -> 3;
 	?ALOADBIT     -> 3;
+	?ALOADS       -> 3;
 	?BINARYSEARCH -> 8;
 	?BITAND       -> 3;
 	?CALL         -> 3;
@@ -67,6 +68,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?CALLFII      -> 4;
 	?GETMEMSIZE   -> 1;
 	?JEQ          -> 3;
+	?JGE          -> 3;
 	?JGEU         -> 3;
 	?JGT          -> 3;
 	?JLT          -> 3;
@@ -74,6 +76,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?JNZ          -> 2;
 	?JUMP         -> 1;
 	?JZ           -> 2;
+	?MUL          -> 3;
 	?NOP          -> 0;
 	?SUB          -> 3;
 	?RETURN       -> 1;

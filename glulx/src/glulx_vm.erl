@@ -121,9 +121,9 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    listen(MachineState1);
 	{From, {binarysearch, Key, KeySize, Start, StructSize, NumStructs,
 	        KeyOffset, Options}} ->
-	    binarysearch(Memory, Key, KeySize, Start, StructSize, NumStructs,
-			 KeyOffset, Options),
-	    ack(From, ok),
+	    Result = binarysearch(Memory, Key, KeySize, Start, StructSize,
+				  NumStructs, KeyOffset, Options),
+	    ack(From, Result),
 	    listen(MachineState0);	    
 	{From, Other} ->
 	    ack(From, {error, Other}),

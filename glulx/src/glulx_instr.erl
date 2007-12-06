@@ -37,12 +37,10 @@ execute(MachinePid, #instr{opcode = OpcodeNum, length = Length}
 	= Instruction) ->
     Execute = get_operation(OpcodeNum),
     Execute(MachinePid, Instruction),
-    IsCall = is_call(OpcodeNum),
-    IsBranch = is_branch(OpcodeNum),
-    IsReturn = is_return(OpcodeNum),
+    KeepPC = keep_pc(OpcodeNum),
     if 
-	IsCall; IsBranch; IsReturn -> keep_pc;
-	true                       -> ?call_machine({inc_pc, Length})
+	KeepPC -> keep_pc;
+	true   -> ?call_machine({inc_pc, Length})
     end.
 
 get_operation(OpcodeNum) ->
@@ -50,6 +48,8 @@ get_operation(OpcodeNum) ->
 	?ADD          -> fun add/2;
 	?ALOAD        -> fun aload/2;
 	?ALOADB       -> fun aloadb/2;
+	?ALOADBIT     -> fun aloadbit/2;
+	?ALOADS       -> fun aloads/2;
 	?BINARYSEARCH -> fun binarysearch/2;
 	?BITAND       -> fun bitand/2;
 	?CALL         -> fun call/2;
@@ -58,6 +58,7 @@ get_operation(OpcodeNum) ->
 	?COPY         -> fun copy/2;
 	?GETMEMSIZE   -> fun getmemsize/2;
 	?JEQ          -> fun jeq/2;
+	?JGE          -> fun jge/2;
 	?JGEU         -> fun jgeu/2;
 	?JGT          -> fun jgt/2;
 	?JLT          -> fun jlt/2;
@@ -65,29 +66,30 @@ get_operation(OpcodeNum) ->
 	?JNZ          -> fun jnz/2;
 	?JUMP         -> fun jump/2;
 	?JZ           -> fun jz/2;
+	?MUL          -> fun mul/2;
 	?NOP          -> fun nop/2;
 	?RETURN       -> fun return/2;
 	?SUB          -> fun sub/2;
 	_Default      -> fun halt/2
     end.
 
-is_branch(?JEQ)    -> true;
-is_branch(?JGEU)   -> true;
-is_branch(?JGT)    -> true;
-is_branch(?JLT)    -> true;
-is_branch(?JNE)    -> true;
-is_branch(?JNZ)    -> true;
-is_branch(?JUMP)   -> true;
-is_branch(?JZ)     -> true;
-is_branch(_)       -> false.
-
-is_call(?CALL)     -> true;
-is_call(?CALLFI)   -> true;
-is_call(?CALLFII)  -> true;
-is_call(_)         -> false.
-
-is_return(?RETURN) -> true;
-is_return(_)       -> false.
+% Branches
+keep_pc(?JEQ)      -> true;
+keep_pc(?JGE)      -> true;
+keep_pc(?JGEU)     -> true;
+keep_pc(?JGT)      -> true;
+keep_pc(?JLT)      -> true;
+keep_pc(?JNE)      -> true;
+keep_pc(?JNZ)      -> true;
+keep_pc(?JUMP)     -> true;
+keep_pc(?JZ)       -> true;
+% Calls
+keep_pc(?CALL)     -> true;
+keep_pc(?CALLFI)   -> true;
+keep_pc(?CALLFII)  -> true;
+% Return
+keep_pc(?RETURN)   -> true;
+keep_pc(_)         -> false.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Instructions
@@ -99,11 +101,39 @@ add(MachinePid, #instr{operands = Operands}) ->
 
 aload(MachinePid, #instr{operands = Operands}) ->
     Value = ?call_machine({get_word32, ?OPERAND_VALUE(1) +
-			   ?OPERAND_VALUE(2) * 4}),
+			   4 * ?OPERAND_VALUE(2)}),
     ?call_machine({store_value, Value, ?OPERAND(3)}).
 
 aloadb(MachinePid, #instr{operands = Operands}) ->
     Value = ?call_machine({get_byte, ?OPERAND_VALUE(1) + ?OPERAND_VALUE(2)}),
+    ?call_machine({store_value, Value, ?OPERAND(3)}).
+
+aloadbit(MachinePid, #instr{operands = Operands}) ->
+    {ByteAddr, BitNum} = bit_pos(?OPERAND_VALUE(1), ?SIGNED_OPERAND_VALUE(2)),
+    Byte = ?call_machine({get_byte, ByteAddr}),
+    BitMask = 2#10000000 bsr (7 - BitNum),
+    case Byte band BitMask of
+	BitMask  -> ?call_machine({store_value, 1, ?OPERAND(3)});
+	_Default -> ?call_machine({store_value, 0, ?OPERAND(3)})
+    end.
+
+%% Helper method used by aloadbit and astorebit, given a base address and
+%% offset, determine the byte address and bit number in memory
+%% @spec bit_pos(int(), int()) -> {int(), int()}.
+bit_pos(Base, Offset) ->
+    if
+	Offset < 0 ->	
+	    ByteAddr = (Base + Offset div 8) - 1,
+	    BitNum = (Offset rem 8 + 8) band 7;
+	true   ->
+	    ByteAddr = Base + Offset div 8,
+	    BitNum = Offset rem 8
+    end,
+    {ByteAddr, BitNum}.
+    
+aloads(MachinePid, #instr{operands = Operands}) ->
+    Value = ?call_machine({get_word16, ?OPERAND_VALUE(1) +
+			   2 * ?OPERAND_VALUE(2)}),
     ?call_machine({store_value, Value, ?OPERAND(3)}).
 
 binarysearch(MachinePid, #instr{operands = Operands}) ->
@@ -143,8 +173,12 @@ jeq(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) =:= ?SIGNED_OPERAND_VALUE(2),
 		       ?OPERAND_VALUE(3)).
 
+jge(MachinePid, #instr{operands = Operands} = Instruction) ->
+    ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) >= ?SIGNED_OPERAND_VALUE(2),
+			?OPERAND_VALUE(3)).
+
 jgeu(MachinePid, #instr{operands = Operands} = Instruction) ->
-     ?branch_or_advance(?OPERAND_VALUE(1) =:= ?OPERAND_VALUE(2),
+     ?branch_or_advance(?OPERAND_VALUE(1) >= ?OPERAND_VALUE(2),
 			?OPERAND_VALUE(3)).
 
 jgt(MachinePid, #instr{operands = Operands} = Instruction) ->
@@ -167,6 +201,10 @@ jump(MachinePid, #instr{operands = Operands} = Instruction) ->
 
 jz(MachinePid, #instr{operands = Operands} = Instruction) ->
    ?branch_or_advance(?OPERAND_VALUE(1) =:= 0, ?OPERAND_VALUE(2)).
+
+mul(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, ?OPERAND_VALUE(1) * ?OPERAND_VALUE(2),
+		   ?OPERAND(3)}).
 
 nop(_MachinePid, _Instruction) -> nop.
 
@@ -228,6 +266,7 @@ op_name(OpcodeNum) ->
 	?ALOAD        -> aload;
 	?ALOADB       -> aloadb;
 	?ALOADBIT     -> aloadbit;
+	?ALOADS       -> aloads;
 	?BINARYSEARCH -> binarysearch;
 	?BITAND       -> bitand;
 	?CALL         -> call;
@@ -236,6 +275,7 @@ op_name(OpcodeNum) ->
 	?COPY         -> copy;
 	?GETMEMSIZE   -> getmemsize;
 	?JEQ          -> jeq;
+	?JGE          -> jge;
 	?JGEU         -> jgeu;
 	?JGT          -> jgt;
 	?JLT          -> jlt;
@@ -243,6 +283,7 @@ op_name(OpcodeNum) ->
 	?JNZ          -> jnz;
 	?JUMP         -> jump;
 	?JZ           -> jz;
+	?MUL          -> mul;
 	?NOP          -> nop;
 	?RETURN       -> return;
 	?SUB          -> sub;
