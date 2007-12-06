@@ -106,6 +106,9 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	{From, {get_word32, Address}} ->
 	    ack(From, glulx_mem:get_word32(Memory, Address)),
 	    listen(MachineState0);
+	{From, {get_ram_word32, Address}} ->
+	    ack(From, glulx_mem:get_ram_word32(Memory, Address)),
+	    listen(MachineState0);
 	{From, pop} ->
 	    {StackValue, MachineState1} = pop(MachineState0),
 	    ack(From, StackValue),
@@ -125,6 +128,17 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 				  NumStructs, KeyOffset, Options),
 	    ack(From, Result),
 	    listen(MachineState0);	    
+	{From, {stack_copy, NumValues}} ->
+	    MachineState1 = stack_copy(MachineState0, NumValues),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {gestalt, Selector, Arg}} ->
+	    ack(From, gestalt(Selector, Arg)),
+	    listen(MachineState0);
+	{From, {set_iosys, Mode, Rock}} ->
+	    MachineState1 = set_iosys(MachineState0, Mode, Rock),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, Other} ->
 	    ack(From, {error, Other}),
 	    listen(MachineState0)
@@ -233,8 +247,8 @@ store_value(MachineState0, Value, {stack, _}) ->
     push(MachineState0, Value);
 store_value(MachineState0, Value, {local, Address}) ->
     set_local(MachineState0, Address, Value);
-store_value(MachineState0, Value, {memory, Address}) ->
-    set_word32(MachineState0, Address, Value).
+store_value(MachineState0, Value, {ram, RamOffset}) ->
+    set_ram_word32(MachineState0, RamOffset, Value).
 
 get_local(#glulx_vm{call_stack  = [#call_frame{locals = Locals} |
 				   _CallStack]}, Address) ->
@@ -273,7 +287,10 @@ set_local_list(Locals, Index, NewValue) ->
 		  lists:sublist(Locals, Index + 2,
 				length(Locals) - 1)]).
 
-set_word32(_, _, _) -> undef.
+%% Sets the 32 bit word at the specified RAM address
+set_ram_word32(#glulx_vm{memory = Memory} = MachineState0, RamOffset, Value) ->
+    MachineState0#glulx_vm{memory = glulx_mem:set_ram_word32(
+				      Memory, RamOffset, Value)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Helper fuctionality
@@ -391,3 +408,32 @@ binsearch(Memory, Key, Left, Right,
 	0  ->
 	    Index
     end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% Stack operations
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+stack_copy(#glulx_vm{value_stack = ValueStack} = MachineState0, NumValues) ->
+    MachineState0#glulx_vm{value_stack =
+			   lists:sublist(ValueStack, NumValues) ++ ValueStack}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% Gestalt information
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-define(GESTALT_IOSYS, 4).
+
+%% Returns results for gestalt
+gestalt(?GESTALT_IOSYS, _Arg) -> 1;
+gestalt(Selector, _Arg) ->
+    io:format("UNKNOWN GESTALT SELECTOR: ~w~n", [Selector]),
+    undef.
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% Gestalt information
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+set_iosys(MachineState0, Mode, Rock) ->
+    io:format("SETTING IOSYS (TODO, ONLY A DUMMY) MODE: ~w, ROCK: ~w~n",
+	      [Mode, Rock]),
+    MachineState0.

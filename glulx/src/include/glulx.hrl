@@ -30,11 +30,14 @@
 -define(BINARYSEARCH, 16#151).
 -define(BITAND,       16#18).
 -define(CALL,         16#30).
+-define(CALLF,        16#160).
 -define(CALLFI,       16#161).
 -define(CALLFII,      16#162).
 -define(CALLFIII,     16#163).
 -define(COPY,         16#40).
+-define(GESTALT,      16#100).
 -define(GETMEMSIZE,   16#102).
+-define(GLK,          16#130).
 -define(JEQ,          16#24).
 -define(JGE,          16#27).
 -define(JGEU,         16#2b).
@@ -47,7 +50,9 @@
 -define(MUL,          16#12).
 -define(NOP,          16#00).
 -define(RETURN,       16#31).
+-define(SETIOSYS,     16#149).
 -define(SUB,          16#11).
+-define(STKCOPY,      16#54).
 
 -record(instr, {opcode, operands, address, opnum_len, length}).
 

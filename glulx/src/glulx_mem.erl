@@ -34,7 +34,8 @@
 
 -module(glulx_mem).
 -export([read_file/1, header/1, memsize/1,
-	 get_byte/2, get_word16/2, get_word32/2]).
+	 get_byte/2, get_word16/2, get_word32/2, get_ram_word32/2,
+	 set_ram_word32/3]).
 -include("include/glulx.hrl").
 
 %% reads the game from the specified file and returns a Memory object
@@ -73,23 +74,47 @@ get_word16(Memory, ByteNum) ->
 get_word32(Memory, ByteNum) ->
     get_bits(Memory, ByteNum, 32).
 
+%% Returns the 32 bit word at the specified ram offset
+%% @spec get_ram_word32(GlulxMemory(), int()) -> int().
+get_ram_word32(Memory, RamOffset) ->
+    Header = header(Memory),
+    get_bits(Memory, Header#glulx_header.ram_start + RamOffset, 32).
+
+set_ram_word32(Memory, RamOffset, Value) ->
+    Header = header(Memory),
+    set_bits(Memory, Header#glulx_header.ram_start + RamOffset, 32, Value).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Helper functionality
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Returns the value with the specified number of bits from the binary
 %% @spec get_bits(binary(), int(), int()) -> int().
-get_bits({BaseMemory, ExtMemory}, ByteNum, NumBits) ->
-    if 
-	ByteNum >= size(BaseMemory) ->
-	    Address = ByteNum - size(BaseMemory),
-	    MemChunk = ExtMemory;
-	true ->
-	    Address = ByteNum,
-	    MemChunk = BaseMemory
-    end,
+get_bits(Memory, ByteNum, NumBits) ->
+    {_, MemChunk, Address} = memchunk_address(Memory, ByteNum),
     <<_:Address/binary, Element:NumBits, _/binary>> = MemChunk,
     Element.
+
+% Sets the Value at the specified byte position
+%% @spec set_bits(binary(), int(), int(), int()) -> binary().
+set_bits({BaseMemory, ExtMemory} = Memory, ByteNum, NumBits, Value) ->
+    {ChunkType, MemChunk, ChunkAddress} = memchunk_address(Memory, ByteNum),
+    <<Start:ChunkAddress/binary, _:NumBits, End/binary>> = MemChunk,
+    NewMemChunk = <<Start:ChunkAddress/binary, Value:NumBits, End/binary>>,
+    case ChunkType of
+	basemem  -> {NewMemChunk, ExtMemory};
+	_Default -> {BaseMemory, NewMemChunk}
+    end.
+
+%% Determines the memory chunk and chunk address
+memchunk_address({BaseMemory, ExtMemory}, ByteNum) ->
+    %io:format("memchunk_address(), ByteNum: ~w~n", [ByteNum]),
+    if 
+	ByteNum >= size(BaseMemory) ->
+	    {extmem, ExtMemory, ByteNum - size(BaseMemory)};
+	true ->
+	    {basemem, BaseMemory, ByteNum}
+    end.
 
 % Extract the Glulx header information
 % @spec header_private(binary()) -> record().

@@ -64,9 +64,13 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?BITAND       -> 3;
 	?CALL         -> 3;
 	?COPY         -> 2;
+	?CALLF        -> 2;
 	?CALLFI       -> 3;
 	?CALLFII      -> 4;
+	?CALLFIII     -> 5;
+	?GESTALT      -> 3;
 	?GETMEMSIZE   -> 1;
+	?GLK          -> 3;
 	?JEQ          -> 3;
 	?JGE          -> 3;
 	?JGEU         -> 3;
@@ -78,8 +82,10 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?JZ           -> 2;
 	?MUL          -> 3;
 	?NOP          -> 0;
-	?SUB          -> 3;
 	?RETURN       -> 1;
+	?SETIOSYS     -> 2;
+	?SUB          -> 3;
+	?STKCOPY      -> 1;
 	_Default      ->
 	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
 		      [Address, OpcodeNum])
@@ -153,13 +159,13 @@ get_operands(MachinePid, Address, [AddrMode | AddrModes])
   when ?is_mem(AddrMode) ->
     case AddrMode of
 	13  ->
-	    [{memory, ?get_byte(Address)} |
+	    [{ram, ?get_byte(Address)} |
 	     get_operands(MachinePid, Address + 1, AddrModes)];
 	14 ->
-	    [{memory, ?get_word16(Address)} |
+	    [{ram, ?get_word16(Address)} |
 	     get_operands(MachinePid, Address + 2, AddrModes)];
 	15 ->
-	    [{memory, ?get_word32(Address)} |
+	    [{ram, ?get_word32(Address)} |
 	     get_operands(MachinePid, Address + 4, AddrModes)];
 	_Default ->
 	    undef

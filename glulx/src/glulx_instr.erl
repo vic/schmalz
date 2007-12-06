@@ -53,9 +53,12 @@ get_operation(OpcodeNum) ->
 	?BINARYSEARCH -> fun binarysearch/2;
 	?BITAND       -> fun bitand/2;
 	?CALL         -> fun call/2;
+	?CALLF        -> fun callf/2;
 	?CALLFI       -> fun callfi/2;
 	?CALLFII      -> fun callfii/2;
+	?CALLFIII     -> fun callfiii/2;
 	?COPY         -> fun copy/2;
+	?GESTALT      -> fun gestalt/2;
 	?GETMEMSIZE   -> fun getmemsize/2;
 	?JEQ          -> fun jeq/2;
 	?JGE          -> fun jge/2;
@@ -69,7 +72,9 @@ get_operation(OpcodeNum) ->
 	?MUL          -> fun mul/2;
 	?NOP          -> fun nop/2;
 	?RETURN       -> fun return/2;
+	?SETIOSYS     -> fun setiosys/2;
 	?SUB          -> fun sub/2;
+	?STKCOPY      -> fun stkcopy/2;
 	_Default      -> fun halt/2
     end.
 
@@ -85,8 +90,10 @@ keep_pc(?JUMP)     -> true;
 keep_pc(?JZ)       -> true;
 % Calls
 keep_pc(?CALL)     -> true;
+keep_pc(?CALLF)    -> true;
 keep_pc(?CALLFI)   -> true;
 keep_pc(?CALLFII)  -> true;
+keep_pc(?CALLFIII) -> true;
 % Return
 keep_pc(?RETURN)   -> true;
 keep_pc(_)         -> false.
@@ -152,6 +159,11 @@ call(MachinePid, #instr{operands = Operands, address = InstrAddress,
     ?call_machine({call, ?OPERAND_VALUE(1), ?OPERAND_VALUE(2),
 		   InstrAddress + InstrLength, ?OPERAND(3)}).
 
+callf(MachinePid, #instr{operands = Operands, address = InstrAddress,
+			 length = InstrLength}) ->
+    ?call_machine({callf, ?OPERAND_VALUE(1), [],
+		   InstrAddress + InstrLength, ?OPERAND(2)}).
+
 callfi(MachinePid, #instr{operands = Operands, address = InstrAddress,
 			  length = InstrLength}) ->
     ?call_machine({callf, ?OPERAND_VALUE(1), [?OPERAND_VALUE(2)],
@@ -163,11 +175,23 @@ callfii(MachinePid, #instr{operands = Operands, address = InstrAddress,
 		   [?OPERAND_VALUE(2), ?OPERAND_VALUE(3)],
 		   InstrAddress + InstrLength, ?OPERAND(4)}).
 
+callfiii(MachinePid, #instr{operands = Operands, address = InstrAddress,
+			    length = InstrLength}) ->
+    ?call_machine({callf, ?OPERAND_VALUE(1),
+		   [?OPERAND_VALUE(2), ?OPERAND_VALUE(3), ?OPERAND_VALUE(4)],
+		   InstrAddress + InstrLength, ?OPERAND(5)}).
+
 copy(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?OPERAND_VALUE(1), ?OPERAND(2)}).
 
 getmemsize(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?call_machine(memsize), ?OPERAND(1)}).
+
+gestalt(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value,
+		   ?call_machine({gestalt, ?OPERAND_VALUE(1),
+				  ?OPERAND_VALUE(2)}),
+		   ?OPERAND(3)}).
 
 jeq(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) =:= ?SIGNED_OPERAND_VALUE(2),
@@ -211,9 +235,15 @@ nop(_MachinePid, _Instruction) -> nop.
 return(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({return_from_call, ?OPERAND_VALUE(1)}).
 
+setiosys(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({set_iosys, ?OPERAND_VALUE(1), ?OPERAND_VALUE(2)}).
+
 sub(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?OPERAND_VALUE(1) - ?OPERAND_VALUE(2),
 		   ?OPERAND(3)}).
+
+stkcopy(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({stack_copy, ?OPERAND_VALUE(1)}).
 
 branch_or_advance(MachinePid, false, _Offset, Instruction) ->
     ?call_machine({inc_pc, Instruction#instr.length});
@@ -234,7 +264,7 @@ operand_value(MachinePid, Operands, Num) ->
 	const    -> Value;
 	stack    -> ?pop();
 	local    -> ?call_machine({get_local, Value});
-	memory   -> ?call_machine({get_word32, Value});
+	ram      -> ?call_machine({get_ram_word32, Value});
 	_Default -> undef
     end.
 
@@ -257,8 +287,8 @@ operands_str([{stack, _} | Operands]) ->
     io_lib:format("(SP) ", []) ++ operands_str(Operands);
 operands_str([{local, Value} | Operands]) ->
     io_lib:format("L~8.16.0B ", [Value]) ++ operands_str(Operands);
-operands_str([{memory, Value} | Operands]) ->
-    io_lib:format("MEM~8.16.0B ", [Value]) ++ operands_str(Operands).
+operands_str([{ram, Value} | Operands]) ->
+    io_lib:format("RAM~8.16.0B ", [Value]) ++ operands_str(Operands).
 
 op_name(OpcodeNum) ->
     case OpcodeNum of
@@ -270,10 +300,14 @@ op_name(OpcodeNum) ->
 	?BINARYSEARCH -> binarysearch;
 	?BITAND       -> bitand;
 	?CALL         -> call;
+	?CALLF        -> callf;
 	?CALLFI       -> callfi;
 	?CALLFII      -> callfii;
+	?CALLFIII     -> callfiii;
 	?COPY         -> copy;
+	?GESTALT      -> gestalt;
 	?GETMEMSIZE   -> getmemsize;
+	?GLK          -> glk;
 	?JEQ          -> jeq;
 	?JGE          -> jge;
 	?JGEU         -> jgeu;
@@ -286,6 +320,8 @@ op_name(OpcodeNum) ->
 	?MUL          -> mul;
 	?NOP          -> nop;
 	?RETURN       -> return;
+	?SETIOSYS     -> setiosys;
 	?SUB          -> sub;
+	?STKCOPY      -> stkcopy;
 	_Default      -> '???'
     end.
