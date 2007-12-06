@@ -55,24 +55,29 @@ decode(MachinePid) ->
 
 decode_operands(MachinePid, Address, OpcodeNum) ->
     NumOperands = case OpcodeNum of
-	?ALOAD      -> 3;
-	?ALOADB     -> 3;
-	?BITAND     -> 3;
-	?CALL       -> 3;
-	?COPY       -> 2;
-	?CALLFI     -> 3;
-	?CALLFII    -> 4;
-	?GETMEMSIZE -> 1;
-	?JEQ        -> 3;
-	?JGEU       -> 3;
-	?JGT        -> 3;
-	?JLT        -> 3;
-	?JNE        -> 3;
-	?JUMP       -> 1;
-	?NOP        -> 0;
-	?SUB        -> 3;
-	?RETURN     -> 1;
-	_Default    ->
+	?ADD          -> 3;
+	?ALOAD        -> 3;
+	?ALOADB       -> 3;
+	?ALOADBIT     -> 3;
+	?BINARYSEARCH -> 8;
+	?BITAND       -> 3;
+	?CALL         -> 3;
+	?COPY         -> 2;
+	?CALLFI       -> 3;
+	?CALLFII      -> 4;
+	?GETMEMSIZE   -> 1;
+	?JEQ          -> 3;
+	?JGEU         -> 3;
+	?JGT          -> 3;
+	?JLT          -> 3;
+	?JNE          -> 3;
+	?JNZ          -> 2;
+	?JUMP         -> 1;
+	?JZ           -> 2;
+	?NOP          -> 0;
+	?SUB          -> 3;
+	?RETURN       -> 1;
+	_Default      ->
 	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
 		      [Address, OpcodeNum])
     end,
@@ -84,6 +89,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 
 -define(is_constant(AddrMode), AddrMode > 0, AddrMode =< 3).
 -define(is_local(AddrMode), AddrMode >= 9, AddrMode =< 11).
+-define(is_mem(AddrMode), AddrMode >= 13, AddrMode =< 15).
 -define(ADDRMODE_ZERO, 0).
 -define(ADDRMODE_STACK_TOP, 8).
 
@@ -136,6 +142,21 @@ get_operands(MachinePid, Address, [AddrMode | AddrModes])
 	     get_operands(MachinePid, Address + 2, AddrModes)];
 	11 ->
 	    [{local, ?get_word32(Address)} |
+	     get_operands(MachinePid, Address + 4, AddrModes)];
+	_Default ->
+	    undef
+    end;
+get_operands(MachinePid, Address, [AddrMode | AddrModes])
+  when ?is_mem(AddrMode) ->
+    case AddrMode of
+	13  ->
+	    [{memory, ?get_byte(Address)} |
+	     get_operands(MachinePid, Address + 1, AddrModes)];
+	14 ->
+	    [{memory, ?get_word16(Address)} |
+	     get_operands(MachinePid, Address + 2, AddrModes)];
+	15 ->
+	    [{memory, ?get_word32(Address)} |
 	     get_operands(MachinePid, Address + 4, AddrModes)];
 	_Default ->
 	    undef

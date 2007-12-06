@@ -22,24 +22,29 @@
 -record(glulx_header, {magic_number, version, ram_start, ext_start, end_mem, 
 		       stack_size, start_func, decode_table, checksum}).
 
--define(ALOAD,      16#48).
--define(ALOADB,     16#4a).
--define(BITAND,     16#18).
--define(CALL,       16#30).
--define(CALLFI,     16#161).
--define(CALLFII,    16#162).
--define(CALLFIII,   16#163).
--define(COPY,       16#40).
--define(GETMEMSIZE, 16#102).
--define(JEQ,        16#24).
--define(JGEU,       16#2b).
--define(JGT,        16#28).
--define(JLT,        16#26).
--define(JNE,        16#25).
--define(JUMP,       16#20).
--define(NOP,        16#00).
--define(RETURN,     16#31).
--define(SUB,        16#11).
+-define(ADD,          16#10).
+-define(ALOAD,        16#48).
+-define(ALOADB,       16#4a).
+-define(ALOADBIT,     16#4b).
+-define(BINARYSEARCH, 16#151).
+-define(BITAND,       16#18).
+-define(CALL,         16#30).
+-define(CALLFI,       16#161).
+-define(CALLFII,      16#162).
+-define(CALLFIII,     16#163).
+-define(COPY,         16#40).
+-define(GETMEMSIZE,   16#102).
+-define(JEQ,          16#24).
+-define(JGEU,         16#2b).
+-define(JGT,          16#28).
+-define(JLT,          16#26).
+-define(JNE,          16#25).
+-define(JNZ,          16#23).
+-define(JUMP,         16#20).
+-define(JZ,           16#22).
+-define(NOP,          16#00).
+-define(RETURN,       16#31).
+-define(SUB,          16#11).
 
 -record(instr, {opcode, operands, address, opnum_len, length}).
 

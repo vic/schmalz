@@ -47,23 +47,28 @@ execute(MachinePid, #instr{opcode = OpcodeNum, length = Length}
 
 get_operation(OpcodeNum) ->
     case OpcodeNum of
-	?ALOAD      -> fun aload/2;
-	?ALOADB     -> fun aloadb/2;
-	?CALL       -> fun call/2;
-	?CALLFI     -> fun callfi/2;
-	?CALLFII    -> fun callfii/2;
-	?COPY       -> fun copy/2;
-	?GETMEMSIZE -> fun getmemsize/2;
-	?JEQ        -> fun jeq/2;
-	?JGEU       -> fun jgeu/2;
-	?JGT        -> fun jgt/2;
-	?JLT        -> fun jlt/2;
-	?JNE        -> fun jne/2;
-	?JUMP       -> fun jump/2;
-	?NOP        -> fun nop/2;
-	?RETURN     -> fun return/2;
-	?SUB        -> fun sub/2;
-	_Default    -> fun halt/2
+	?ADD          -> fun add/2;
+	?ALOAD        -> fun aload/2;
+	?ALOADB       -> fun aloadb/2;
+	?BINARYSEARCH -> fun binarysearch/2;
+	?BITAND       -> fun bitand/2;
+	?CALL         -> fun call/2;
+	?CALLFI       -> fun callfi/2;
+	?CALLFII      -> fun callfii/2;
+	?COPY         -> fun copy/2;
+	?GETMEMSIZE   -> fun getmemsize/2;
+	?JEQ          -> fun jeq/2;
+	?JGEU         -> fun jgeu/2;
+	?JGT          -> fun jgt/2;
+	?JLT          -> fun jlt/2;
+	?JNE          -> fun jne/2;
+	?JNZ          -> fun jnz/2;
+	?JUMP         -> fun jump/2;
+	?JZ           -> fun jz/2;
+	?NOP          -> fun nop/2;
+	?RETURN       -> fun return/2;
+	?SUB          -> fun sub/2;
+	_Default      -> fun halt/2
     end.
 
 is_branch(?JEQ)    -> true;
@@ -71,6 +76,9 @@ is_branch(?JGEU)   -> true;
 is_branch(?JGT)    -> true;
 is_branch(?JLT)    -> true;
 is_branch(?JNE)    -> true;
+is_branch(?JNZ)    -> true;
+is_branch(?JUMP)   -> true;
+is_branch(?JZ)     -> true;
 is_branch(_)       -> false.
 
 is_call(?CALL)     -> true;
@@ -85,16 +93,29 @@ is_return(_)       -> false.
 %%%%% Instructions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-aload(MachinePid, #instr{operands = Operands, address = InstrAddress,
-			  length = InstrLength}) ->
+add(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, ?OPERAND_VALUE(1) + ?OPERAND_VALUE(2),
+		   ?OPERAND(3)}).
+
+aload(MachinePid, #instr{operands = Operands}) ->
     Value = ?call_machine({get_word32, ?OPERAND_VALUE(1) +
 			   ?OPERAND_VALUE(2) * 4}),
     ?call_machine({store_value, Value, ?OPERAND(3)}).
 
-aloadb(MachinePid, #instr{operands = Operands, address = InstrAddress,
-			  length = InstrLength}) ->
+aloadb(MachinePid, #instr{operands = Operands}) ->
     Value = ?call_machine({get_byte, ?OPERAND_VALUE(1) + ?OPERAND_VALUE(2)}),
     ?call_machine({store_value, Value, ?OPERAND(3)}).
+
+binarysearch(MachinePid, #instr{operands = Operands}) ->
+    Result = ?call_machine({binarysearch, ?OPERAND_VALUE(1), ?OPERAND_VALUE(2),
+			   ?OPERAND_VALUE(3), ?OPERAND_VALUE(4),
+			   ?OPERAND_VALUE(5), ?OPERAND_VALUE(6),
+			   ?OPERAND_VALUE(7)}),
+    ?call_machine({store_value, Result, ?OPERAND(8)}).
+
+bitand(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, ?OPERAND_VALUE(1) band ?OPERAND_VALUE(2),
+		   ?OPERAND(3)}).
 
 call(MachinePid, #instr{operands = Operands, address = InstrAddress,
 		        length = InstrLength}) ->
@@ -138,8 +159,14 @@ jne(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) /= ?SIGNED_OPERAND_VALUE(2),
 		       ?OPERAND_VALUE(3)).
 
+jnz(MachinePid, #instr{operands = Operands} = Instruction) ->
+    ?branch_or_advance(?OPERAND_VALUE(1) /= 0, ?OPERAND_VALUE(2)).
+
 jump(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(true, ?OPERAND_VALUE(1)).
+
+jz(MachinePid, #instr{operands = Operands} = Instruction) ->
+   ?branch_or_advance(?OPERAND_VALUE(1) =:= 0, ?OPERAND_VALUE(2)).
 
 nop(_MachinePid, _Instruction) -> nop.
 
@@ -166,9 +193,11 @@ branch_or_advance(MachinePid, true, Offset,
 operand_value(MachinePid, Operands, Num) ->
     {Type, Value} = ?OPERAND(Num),
     case Type of
+	const    -> Value;
 	stack    -> ?pop();
 	local    -> ?call_machine({get_local, Value});
-	_Default -> Value
+	memory   -> ?call_machine({get_word32, Value});
+	_Default -> undef
     end.
 
 halt(MachinePid, _) ->
@@ -189,26 +218,33 @@ operands_str([{const, Value} | Operands]) ->
 operands_str([{stack, _} | Operands]) ->
     io_lib:format("(SP) ", []) ++ operands_str(Operands);
 operands_str([{local, Value} | Operands]) ->
-    io_lib:format("L~8.16.0B ", [Value]) ++ operands_str(Operands).
+    io_lib:format("L~8.16.0B ", [Value]) ++ operands_str(Operands);
+operands_str([{memory, Value} | Operands]) ->
+    io_lib:format("MEM~8.16.0B ", [Value]) ++ operands_str(Operands).
 
 op_name(OpcodeNum) ->
     case OpcodeNum of
-	?ALOAD      -> aload;
-	?ALOADB     -> aloadb;
-	?BITAND     -> bitand;
-	?CALL       -> call;
-	?CALLFI     -> callfi;
-	?CALLFII    -> callfii;
-	?COPY       -> copy;
-	?GETMEMSIZE -> getmemsize;
-	?JEQ        -> jeq;
-	?JGEU       -> jgeu;
-	?JGT        -> jgt;
-	?JLT        -> jlt;
-	?JNE        -> jne;
-	?JUMP       -> jump;
-	?NOP        -> nop;
-	?RETURN     -> return;
-	?SUB        -> sub;
-	_Default    -> '???'
+	?ADD          -> add;
+	?ALOAD        -> aload;
+	?ALOADB       -> aloadb;
+	?ALOADBIT     -> aloadbit;
+	?BINARYSEARCH -> binarysearch;
+	?BITAND       -> bitand;
+	?CALL         -> call;
+	?CALLFI       -> callfi;
+	?CALLFII      -> callfii;
+	?COPY         -> copy;
+	?GETMEMSIZE   -> getmemsize;
+	?JEQ          -> jeq;
+	?JGEU         -> jgeu;
+	?JGT          -> jgt;
+	?JLT          -> jlt;
+	?JNE          -> jne;
+	?JNZ          -> jnz;
+	?JUMP         -> jump;
+	?JZ           -> jz;
+	?NOP          -> nop;
+	?RETURN       -> return;
+	?SUB          -> sub;
+	_Default      -> '???'
     end.

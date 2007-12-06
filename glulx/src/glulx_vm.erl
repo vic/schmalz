@@ -119,6 +119,12 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    %io:format("CallFrame after: ~p~n", [CallFrame]),
 	    ack(From, ok),
 	    listen(MachineState1);
+	{From, {binarysearch, Key, KeySize, Start, StructSize, NumStructs,
+	        KeyOffset, Options}} ->
+	    binarysearch(Memory, Key, KeySize, Start, StructSize, NumStructs,
+			 KeyOffset, Options),
+	    ack(From, ok),
+	    listen(MachineState0);	    
 	{From, Other} ->
 	    ack(From, {error, Other}),
 	    listen(MachineState0)
@@ -306,4 +312,82 @@ locals_size([{LocalType, _} | Locals], Last) ->
 	    1 + locals_size(Locals, LocalType);
 	true ->
 	    locals_size(Locals, LocalType)
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Searching
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Extracts the search option flags from the option value
+search_flags(Options) ->
+    { Options band 16#01 =:= 16#01, Options band 16#02 =:= 16#02,
+      Options band 16#04 =:= 16#04 }.
+
+%% Naive implementation of key compare: Key is turned into a list
+%% of byte values and then compared with the key at address
+%% NOTE: ZeroKeyTerminates is ignored
+key_compare(Memory, Key, Address, KeySize,
+	    {KeyIndirect, _ZeroKeyTerminates}) ->
+    KeyList = search_key_to_list(Memory, Key, KeySize, KeyIndirect),
+    key_compare(Memory, KeyList, Address).
+
+key_compare(_Memory, [], _Address) -> 0;
+key_compare(Memory, [Byte | Bytes], Address) ->
+    CmpByte = glulx_mem:get_byte(Memory, Address),
+    io:format("Compare ~w with ~w~n", [Byte, CmpByte]),
+    if
+	Byte < CmpByte -> -1;
+        Byte > CmpByte -> 1;
+	true           -> key_compare(Memory, Bytes, Address + 1)
+    end.
+
+search_key_to_list(_Memory, Key, 1, false) -> [ Key band 16#ff ];
+search_key_to_list(_Memory, Key, 2, false) ->
+    [ (Key bsr 8) band 16#ff, Key band 16#ff ];
+search_key_to_list(_Memory, Key, 3, false) ->
+    [ (Key bsr 16) band 16#ff, (Key bsr 8) band 16#ff, Key band 16#ff ];
+search_key_to_list(_Memory, Key, 4, false) ->
+    [ (Key bsr 24) band 16#ff, (Key bsr 16) band 16#ff,
+      (Key bsr 8) band 16#ff, Key band 16#ff ].				      
+% TODO: INDIRECT KEYS !!!
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Binary Search
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% public interface to binary search
+binarysearch(Memory, Key, KeySize, Start, StructSize, NumStructs, KeyOffset,
+	     Options) ->
+    { KeyIndirect, ZeroKeyTerminates, ReturnIndex } = search_flags(Options),
+    io:format("BINARYSEARCH, KEY: ~w KEYSIZE: ~w, START: ~w, "
+	      "STRUCTSIZE: ~w, NUMSTRUCTS: ~w, KEYOFFSET: ~w, "
+	      "INDIRECT: ~p, ZERO_TERM: ~p, RET_IDX: ~p~n",
+	      [Key, KeySize, Start, StructSize, NumStructs,
+	       KeyOffset, KeyIndirect, ZeroKeyTerminates, ReturnIndex]),
+    Index = binsearch(Memory, Key, 0, NumStructs - 1,
+	      {Start, StructSize, KeySize, KeyOffset,
+	       {KeyIndirect, ZeroKeyTerminates}}),
+    io:format("RESULT OF BINSEARCH: ~w~n", [Index]),
+    if
+	ReturnIndex -> Index;
+	true        -> Start + Index * StructSize
+    end.
+
+binsearch(_Memory, _Key, Left, Right,
+	  {_Start, _StructSize, _KeySize, _KeyOffset, _Options})
+  when Left > Right -> -1;
+binsearch(Memory, Key, Left, Right,
+	  {Start, StructSize, KeySize, KeyOffset, Options}) ->
+    Index = (Left + Right) div 2,
+    Address = Start + Index * StructSize,
+    io:format("binsearch at index: ~w, address: ~w~n", [Index, Address]),
+    case key_compare(Memory, Key, Address + KeyOffset, KeySize, Options) of
+	1  ->
+	    binsearch(Memory, Key, Index + 1, Right,
+		      {Start, StructSize, KeySize, KeyOffset, Options});
+	-1 ->
+	    binsearch(Memory, Key, Left, Index - 1,
+		      {Start, StructSize, KeySize, KeyOffset, Options});
+	0  ->
+	    Index
     end.
