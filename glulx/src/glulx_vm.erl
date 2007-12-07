@@ -23,12 +23,13 @@
 %%%-----------------------------------------------------------------------
 
 -module(glulx_vm).
--export([create/1, rpc/2, set_local_list/3]).
+-export([create/2, rpc/2, set_local_list/3,
+	 set_word32/3]).
 -include("include/glulx.hrl").
 
 -record(call_frame, {type, result_spec, return_address, invocation_sp,
 		     locals}).
--record(glulx_vm, {memory, call_stack, value_stack, pc, status}).
+-record(glulx_vm, {memory, call_stack, value_stack, pc, status, glk_pid}).
 
 % Function types
 -define(ARGS_STACK,  192).
@@ -42,14 +43,14 @@
 
 %% Creates an initialized Glulx-VM.
 %% @spec create(GlulxMem()) -> pid().
-create(Memory) ->
+create(Memory, GlkPid) ->
     #glulx_header{start_func = StartFuncAddr} = glulx_mem:header(Memory),
     StartFuncFrame = decode_function(Memory, StartFuncAddr, 0, undef,
 				     {const, ?DO_NOT_STORE}),
     Vm = #glulx_vm{memory = Memory, value_stack = [],
 		   call_stack = [StartFuncFrame],
 		   pc = StartFuncAddr + function_offset(StartFuncFrame),
-		   status = run},
+		   status = run, glk_pid = GlkPid},
     spawn(fun() -> listen(Vm) end).
 
 rpc(MachinePid, Message) ->
@@ -109,6 +110,10 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	{From, {get_ram_word32, Address}} ->
 	    ack(From, glulx_mem:get_ram_word32(Memory, Address)),
 	    listen(MachineState0);
+	{From, {set_word32, Address, Value}} ->
+	    MachineState1 = set_word32(Memory, Address, Value),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, pop} ->
 	    {StackValue, MachineState1} = pop(MachineState0),
 	    ack(From, StackValue),
@@ -139,7 +144,13 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    MachineState1 = set_iosys(MachineState0, Mode, Rock),
 	    ack(From, ok),
 	    listen(MachineState1);
+	{From, {glk, Identifier, NumArgs}} ->
+	    {GlkResult, MachineState1} =
+		glk(MachineState0, Identifier, NumArgs),
+	    ack(From, GlkResult),
+	    listen(MachineState1);
 	{From, Other} ->
+	    io:format("UNKNOWN GLULX OP: ~p~n", Other),
 	    ack(From, {error, Other}),
 	    listen(MachineState0)
     end.
@@ -179,10 +190,10 @@ callf(#glulx_vm{memory = Memory, value_stack = ValueStack} = MachineState0,
 				ReturnAddress, ResultSpec),
     MachineState1 = push_call_frame(MachineState0, CallFrame, Address),
     MachineState2 = copy_args(MachineState1, Args),
-    #glulx_vm{call_stack = [CallFrame2 | _], value_stack = ValueStack2}
-	= MachineState2,
-    io:format("@callf with CallFrame: ~p Stack: ~p~n",
-	      [CallFrame2, ValueStack2]),
+%    #glulx_vm{call_stack = [CallFrame2 | _], value_stack = ValueStack2}
+%	= MachineState2,
+    %io:format("@callf with CallFrame: ~p Stack: ~p~n",
+%	      [CallFrame2, ValueStack2]),
     MachineState2.
 
 %% Push a call frame on the call stack and sets the pc to the target address
@@ -430,10 +441,31 @@ gestalt(Selector, _Arg) ->
     undef.
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%% Gestalt information
+%%%% I/O system
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 set_iosys(MachineState0, Mode, Rock) ->
     io:format("SETTING IOSYS (TODO, ONLY A DUMMY) MODE: ~w, ROCK: ~w~n",
 	      [Mode, Rock]),
     MachineState0.
+
+glk(#glulx_vm{glk_pid = GlkPid} = MachineState0, Identifier, NumArgs) ->
+    {GlkArgs, MachineState1} = pop_stack_values(MachineState0, NumArgs),
+    {glk_result, ReturnValue, VmCallbacks} =
+	glk:rpc(GlkPid, {call, Identifier, GlkArgs}),
+    %io:format("RESULT FROM GLK: (~w, ~p)~n", [ReturnValue, VmCallbacks]),
+    {ReturnValue, glk_vm_callbacks(MachineState1, VmCallbacks)}.
+
+glk_vm_callbacks(MachineState0, []) -> MachineState0;
+glk_vm_callbacks(MachineState0, [{Callback, Params} | VmActions]) ->
+    MachineState1 = apply(glulx_vm, Callback, [MachineState0 | Params]),
+    glk_vm_callbacks(MachineState1, VmActions).
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% GLK Callbacks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+set_word32(#glulx_vm{memory = Memory} = MachineState0, Address, Value) ->
+    MachineState0#glulx_vm{
+      memory = glulx_mem:set_word32(Memory, Address, Value)}.
+

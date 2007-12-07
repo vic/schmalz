@@ -60,6 +60,7 @@ get_operation(OpcodeNum) ->
 	?COPY         -> fun copy/2;
 	?GESTALT      -> fun gestalt/2;
 	?GETMEMSIZE   -> fun getmemsize/2;
+	?GLK          -> fun glk/2;
 	?JEQ          -> fun jeq/2;
 	?JGE          -> fun jge/2;
 	?JGEU         -> fun jgeu/2;
@@ -193,6 +194,12 @@ gestalt(MachinePid, #instr{operands = Operands}) ->
 				  ?OPERAND_VALUE(2)}),
 		   ?OPERAND(3)}).
 
+glk(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value,
+		   ?call_machine({glk, ?OPERAND_VALUE(1),
+				  ?OPERAND_VALUE(2)}),
+		   ?OPERAND(3)}).
+
 jeq(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) =:= ?SIGNED_OPERAND_VALUE(2),
 		       ?OPERAND_VALUE(3)).
@@ -253,9 +260,9 @@ branch_or_advance(MachinePid, true, 1, _Instruction) ->
     ?call_machine({return_from_call, 1});
 branch_or_advance(MachinePid, true, Offset,
 		  #instr{address = InstrAddress, length = Length,
-			 opnum_len = OpNumLen}) ->
-    io:format("branch, InstrAddr: ~w, Length: ~w, OpNumLen: ~w, Offset = ~w~n",
-	      [InstrAddress, Length, OpNumLen, Offset]),
+			 opnum_len = _OpNumLen}) ->
+    %io:format("branch, InstrAddr: ~w, Length: ~w, OpNumLen: ~w, Offset = ~w~n",
+%	      [InstrAddress, Length, OpNumLen, Offset]),
     ?call_machine({set_pc, InstrAddress + Length + Offset - 2}).
 
 operand_value(MachinePid, Operands, Num) ->
@@ -290,6 +297,7 @@ operands_str([{local, Value} | Operands]) ->
 operands_str([{ram, Value} | Operands]) ->
     io_lib:format("RAM~8.16.0B ", [Value]) ++ operands_str(Operands).
 
+%% For debugging purposes
 op_name(OpcodeNum) ->
     case OpcodeNum of
 	?ADD          -> add;

@@ -92,7 +92,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
     end,
     AddrModes = decode_operand_addr_modes(MachinePid, Address, NumOperands),
     AddrModesLength = (length(AddrModes) div 2) + (length(AddrModes) rem 2),
-    io:format("AddrModes: ~w~n", [AddrModes]),
+    %io:format("AddrModes: ~w~n", [AddrModes]),
     {AddrModesLength + operand_data_length(AddrModes),
      get_operands(MachinePid, Address + AddrModesLength, AddrModes)}.
 
