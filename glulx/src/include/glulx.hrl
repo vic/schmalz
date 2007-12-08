@@ -27,6 +27,7 @@
 -define(ALOADB,       16#4a).
 -define(ALOADBIT,     16#4b).
 -define(ALOADS,       16#49).
+-define(ASTORE,       16#4c).
 -define(BINARYSEARCH, 16#151).
 -define(BITAND,       16#18).
 -define(CALL,         16#30).
@@ -53,6 +54,7 @@
 -define(SETIOSYS,     16#149).
 -define(SUB,          16#11).
 -define(STKCOPY,      16#54).
+-define(STREAMCHAR,   16#70).
 
 -record(instr, {opcode, operands, address, opnum_len, length}).
 

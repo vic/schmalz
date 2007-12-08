@@ -111,7 +111,7 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    ack(From, glulx_mem:get_ram_word32(Memory, Address)),
 	    listen(MachineState0);
 	{From, {set_word32, Address, Value}} ->
-	    MachineState1 = set_word32(Memory, Address, Value),
+	    MachineState1 = set_word32(MachineState0, Address, Value),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, pop} ->

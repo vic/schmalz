@@ -50,6 +50,7 @@ get_operation(OpcodeNum) ->
 	?ALOADB       -> fun aloadb/2;
 	?ALOADBIT     -> fun aloadbit/2;
 	?ALOADS       -> fun aloads/2;
+	?ASTORE       -> fun astore/2;
 	?BINARYSEARCH -> fun binarysearch/2;
 	?BITAND       -> fun bitand/2;
 	?CALL         -> fun call/2;
@@ -143,6 +144,10 @@ aloads(MachinePid, #instr{operands = Operands}) ->
     Value = ?call_machine({get_word16, ?OPERAND_VALUE(1) +
 			   2 * ?OPERAND_VALUE(2)}),
     ?call_machine({store_value, Value, ?OPERAND(3)}).
+
+astore(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({set_word32, ?OPERAND_VALUE(1) + 4 * ?OPERAND_VALUE(2),
+		   ?OPERAND_VALUE(3)}).
 
 binarysearch(MachinePid, #instr{operands = Operands}) ->
     Result = ?call_machine({binarysearch, ?OPERAND_VALUE(1), ?OPERAND_VALUE(2),
@@ -305,6 +310,7 @@ op_name(OpcodeNum) ->
 	?ALOADB       -> aloadb;
 	?ALOADBIT     -> aloadbit;
 	?ALOADS       -> aloads;
+	?ASTORE       -> astore;
 	?BINARYSEARCH -> binarysearch;
 	?BITAND       -> bitand;
 	?CALL         -> call;
@@ -331,5 +337,6 @@ op_name(OpcodeNum) ->
 	?SETIOSYS     -> setiosys;
 	?SUB          -> sub;
 	?STKCOPY      -> stkcopy;
+	?STREAMCHAR   -> streamchar;
 	_Default      -> '???'
     end.

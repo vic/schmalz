@@ -60,6 +60,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?ALOADB       -> 3;
 	?ALOADBIT     -> 3;
 	?ALOADS       -> 3;
+	?ASTORE       -> 3;
 	?BINARYSEARCH -> 8;
 	?BITAND       -> 3;
 	?CALL         -> 3;
@@ -86,6 +87,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?SETIOSYS     -> 2;
 	?SUB          -> 3;
 	?STKCOPY      -> 1;
+	?STREAMCHAR   -> 1;
 	_Default      ->
 	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
 		      [Address, OpcodeNum])
