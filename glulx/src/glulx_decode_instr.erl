@@ -61,6 +61,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?ALOADBIT     -> 3;
 	?ALOADS       -> 3;
 	?ASTORE       -> 3;
+	?ASTOREBIT    -> 3;
 	?BINARYSEARCH -> 8;
 	?BITAND       -> 3;
 	?CALL         -> 3;

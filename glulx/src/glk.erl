@@ -32,12 +32,12 @@
 
 -module(glk).
 -export([init/0, rpc/2]).
-
--record(glk_state, {windows, streams, filerefs}).
+-include("include/glk.hrl").
+-record(glk_state, {windows, streams, filerefs, active_stream}).
 
 init() ->
-    GlkState = #glk_state{windows = init_windows(), streams = [],
-			  filerefs = []},
+    GlkState = #glk_state{windows = init_windows(), streams = init_streams(),
+			  filerefs = [], active_stream = null},
     spawn(fun() -> listen(GlkState) end).
 
 rpc(GlkPid, Message) ->
@@ -55,10 +55,10 @@ listen(GlkState0) ->
 	    io:format("GLK-$~8.16.0B: ~p ~p~n",
 		      [Selector, func_name(Selector), GlkArgs]),
 	    Operation = get_op(Selector),
-	    {Result, GlkState1} = Operation(GlkState0, GlkArgs),
+	    {GlkResult, GlkState1} = Operation(GlkState0, GlkArgs),
 	    %io:format("GLK API RESULT ~p~n", [Result]),
 	    io:format("GLK STATE ~p~n", [GlkState1]),
-	    ack(From, Result),
+	    ack(From, GlkResult),
 	    listen(GlkState1);
 	{From, Other} ->
 	    ack(From, {error, Other}),
@@ -69,11 +69,12 @@ ack(Pid, Message) -> Pid ! {self(), Message}.
 
 get_op(Selector) ->
     case Selector of
-	16#20    -> fun window_iterate/2;
-	16#23    -> fun window_open/2;
-	16#2f    -> fun set_window/2;
-	16#40    -> fun stream_iterate/2;
-	16#64    -> fun fileref_iterate/2;
+	?GLK_WINDOW_ITERATE  -> fun glk_window_iterate/2;
+	?GLK_WINDOW_OPEN     -> fun glk_window_open/2;
+	?GLK_SET_WINDOW      -> fun glk_set_window/2;
+	?GLK_STREAM_ITERATE  -> fun glk_stream_iterate/2;
+	?GLK_FILEREF_ITERATE -> fun glk_fileref_iterate/2;
+	?GLK_PUT_CHAR        -> fun glk_put_char/2;
 	_Default -> undef
     end.
 
@@ -83,14 +84,36 @@ get_op(Selector) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Streams
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
+
+-record(glk_stream, {id, type, ref}).
+init_streams() -> {1, []}.
+
+glk_stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
     Stream = 0,
     if
 	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
 	true        -> VmCallbacks = []
     end,
-    {{glk_result, Stream, VmCallbacks}, GlkState0}.
+    {?GLK_RESULT_CB(Stream, VmCallbacks), GlkState0}.
+
+add_stream(#glk_state{streams = {NextId, Streams}} = GlkState0, Type, Ref) ->
+    Stream = #glk_stream{id = NextId, type = Type, ref = Ref},
+    GlkState0#glk_state{streams = {NextId + 1, Streams ++ [Stream]}}.
+
+glk_put_char(#glk_state{active_stream = ActiveStreamId,
+			streams = {_, Streams}} = GlkState0, [Char]) ->
+    CurrentStream = get_stream(Streams, ActiveStreamId),
+    GlkState1 = stream_put_char(GlkState0, CurrentStream, Char),
+    {?GLK_RESULT_VOID, GlkState1}.
+
+stream_put_char(GlkState0, #glk_stream{type = window, ref = WindowId}, Char) ->
+    window_put_char(GlkState0, WindowId, Char).
+
+get_stream(Streams, ActiveStreamId) ->
+    lists:last(lists:filter(fun (Stream) ->
+				    Stream#glk_stream.id =:= ActiveStreamId
+			    end, Streams)).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Glk Window system
@@ -123,31 +146,33 @@ stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
 
 init_windows() -> {1, undef}.
 
-window_iterate(GlkState0, [_CurrWindow, RockPtr]) ->
+glk_window_iterate(GlkState0, [_CurrWindow, RockPtr]) ->
     Rock = 0,
     Window = 0,
     if
 	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
 	true        -> VmCallbacks = []
     end,
-    {{glk_result, Window, VmCallbacks}, GlkState0}.
+    {?GLK_RESULT_CB(Window, VmCallbacks), GlkState0}.
 
-window_open(#glk_state{windows = {NextId, undef}} = GlkState0,
+glk_window_open(#glk_state{windows = {NextId, undef}} = GlkState0,
 	    [0, _, _, Wintype, Rock]) ->
     io:format("OPENING INITIAL WINDOW, "
 	      "WinType: ~w, Rock: ~w~n", [Wintype, Rock]),
     Window = create_window(NextId, Wintype, Rock),
-    {{glk_result, Window#glk_window.id, []},
-     GlkState0#glk_state{windows = {NextId + 1, Window}}};
-window_open(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
+    GlkState1 = GlkState0#glk_state{windows = {NextId + 1, Window}},
+    {?GLK_RESULT(Window#glk_window.id),
+     add_stream(GlkState1, window, NextId)};
+glk_window_open(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
 	    [Split, Method, Size, Wintype, Rock]) ->
     io:format("OPENING WINDOW (TODO), Split: ~w, Method: ~w, Size: ~w, "
 	      "WinType: ~w, Rock: ~w~n", [Split, Method, Size, Wintype, Rock]),
     Window = create_window(NextId, Wintype, Rock),
-    {{glk_result, Window#glk_window.id, []},
-     GlkState0#glk_state{
-       windows = {NextId + 2, split_window(WindowTree, Split, Method, Size,
-					   Window)}}}.
+    GlkState1 = GlkState0#glk_state{
+		  windows = {NextId + 2, split_window(WindowTree, Split, Method,
+						      Size, Window)}},
+    {?GLK_RESULT(Window#glk_window.id),
+     add_stream(GlkState1, window, NextId)}.
 
 split_window(#glk_window{id = Split} = ParentWindow,
 	     Split, Method, Size, ChildWindow) ->
@@ -216,29 +241,52 @@ create_pair_window(ParentWindow, #glk_window{id = ChildId} = ChildWindow,
 		     child2 = Second, size2 = Size2}.
     
 
-set_window(GlkState0, [_WindowId]) ->
-    % TODO: Stream
-    {{glk_result, 0, []}, GlkState0}.
+glk_set_window(#glk_state{streams = {_, Streams}} = GlkState0, [WindowId]) ->
+    {?GLK_RESULT_VOID,
+     GlkState0#glk_state{active_stream = window_stream(Streams, WindowId)}}.
+
+window_stream([], _) -> undef;
+window_stream([#glk_stream{id = Id, type = window, ref = WindowId} | _Streams],
+	       WindowId) -> Id;
+window_stream([_ | Streams], WindowId) -> window_stream(Streams, WindowId).
+
+window_put_char(#glk_state{windows = {_, WindowTree}} = GlkState0,
+		WindowId, Char) ->
+    GlkState0#glk_state{windows = window_put_char2(WindowTree, WindowId, Char)}.
+
+window_put_char2(#glk_window{id = WindowId, buffer = Buffer} = GlkWindow0,
+		 WindowId, Char) ->
+    GlkWindow0#glk_window{buffer = Buffer ++ [Char]};
+window_put_char2(#glk_window{id = _SomeWindowId}, _WindowId, _) -> notfound;
+window_put_char2(#glk_pair_window{child1 = Child1, child2 = Child2},
+		 WindowId, Char) ->
+    WindowTree = window_put_char2(Child1, WindowId, Char),
+    case WindowTree of
+	notfound -> window_put_char2(Child2, WindowId, Char);
+	_Default -> WindowTree
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% File Refs
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fileref_iterate(GlkState0, [_CurrFileref, RockPtr]) ->
+
+glk_fileref_iterate(GlkState0, [_CurrFileref, RockPtr]) ->
     Rock = 0,
     Fileref = 0,
     if
 	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
 	true        -> VmCallbacks = []
     end,
-    {{glk_result, Fileref, VmCallbacks}, GlkState0}.
+    {?GLK_RESULT_CB(Fileref, VmCallbacks), GlkState0}.
 
 %% Determine the public API function name
 func_name(Selector) ->
     case Selector of
-	16#20 -> glk_window_iterate;
-	16#23 -> glk_window_open;
-	16#2f -> glk_set_window;
-	16#40 -> glk_stream_iterate;
-	16#64 -> glk_fileref_iterate;
+	?GLK_WINDOW_ITERATE  -> glk_window_iterate;
+	?GLK_WINDOW_OPEN     -> glk_window_open;
+	?GLK_SET_WINDOW      -> glk_set_window;
+	?GLK_STREAM_ITERATE  -> glk_stream_iterate;
+	?GLK_FILEREF_ITERATE -> glk_fileref_iterate;
+	?GLK_PUT_CHAR        -> glk_put_char;
 	_Default -> '(unknown glk selector)'
     end. 

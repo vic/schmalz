@@ -26,6 +26,7 @@
 -export([create/2, rpc/2, set_local_list/3,
 	 set_word32/3]).
 -include("include/glulx.hrl").
+-include("include/glk.hrl").
 
 -record(call_frame, {type, result_spec, return_address, invocation_sp,
 		     locals}).
@@ -148,6 +149,11 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    {GlkResult, MachineState1} =
 		glk(MachineState0, Identifier, NumArgs),
 	    ack(From, GlkResult),
+	    listen(MachineState1);
+	{From, {streamchar, Latin1Char}} ->
+	    {_GlkResult, MachineState1} =
+		call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
+	    ack(From, ok),
 	    listen(MachineState1);
 	{From, Other} ->
 	    io:format("UNKNOWN GLULX OP: ~p~n", Other),
@@ -449,12 +455,15 @@ set_iosys(MachineState0, Mode, Rock) ->
 	      [Mode, Rock]),
     MachineState0.
 
-glk(#glulx_vm{glk_pid = GlkPid} = MachineState0, Identifier, NumArgs) ->
+glk(MachineState0, Identifier, NumArgs) ->
     {GlkArgs, MachineState1} = pop_stack_values(MachineState0, NumArgs),
+    call_glk(MachineState1, Identifier, GlkArgs).
+
+call_glk(#glulx_vm{glk_pid = GlkPid} = MachineState0, Identifier, GlkArgs) ->
     {glk_result, ReturnValue, VmCallbacks} =
-	glk:rpc(GlkPid, {call, Identifier, GlkArgs}),
-    %io:format("RESULT FROM GLK: (~w, ~p)~n", [ReturnValue, VmCallbacks]),
-    {ReturnValue, glk_vm_callbacks(MachineState1, VmCallbacks)}.
+	?call_glk({call, Identifier, GlkArgs}),
+    %io:format ("RESULT FROM GLK: (~w, ~p)~n", [ReturnValue, VmCallbacks]),
+    {ReturnValue, glk_vm_callbacks(MachineState0, VmCallbacks)}.
 
 glk_vm_callbacks(MachineState0, []) -> MachineState0;
 glk_vm_callbacks(MachineState0, [{Callback, Params} | VmActions]) ->

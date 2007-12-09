@@ -77,6 +77,7 @@ get_operation(OpcodeNum) ->
 	?SETIOSYS     -> fun setiosys/2;
 	?SUB          -> fun sub/2;
 	?STKCOPY      -> fun stkcopy/2;
+	?STREAMCHAR   -> fun streamchar/2;
 	_Default      -> fun halt/2
     end.
 
@@ -257,6 +258,9 @@ sub(MachinePid, #instr{operands = Operands}) ->
 stkcopy(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({stack_copy, ?OPERAND_VALUE(1)}).
 
+streamchar(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({streamchar, ?OPERAND_VALUE(1)}).
+
 branch_or_advance(MachinePid, false, _Offset, Instruction) ->
     ?call_machine({inc_pc, Instruction#instr.length});
 branch_or_advance(MachinePid, true, 0, _Instruction) ->
@@ -311,6 +315,7 @@ op_name(OpcodeNum) ->
 	?ALOADBIT     -> aloadbit;
 	?ALOADS       -> aloads;
 	?ASTORE       -> astore;
+	?ASTOREBIT    -> astorebit;
 	?BINARYSEARCH -> binarysearch;
 	?BITAND       -> bitand;
 	?CALL         -> call;

@@ -28,6 +28,7 @@
 -define(ALOADBIT,     16#4b).
 -define(ALOADS,       16#49).
 -define(ASTORE,       16#4c).
+-define(ASTOREBIT,    16#4f).
 -define(BINARYSEARCH, 16#151).
 -define(BITAND,       16#18).
 -define(CALL,         16#30).
