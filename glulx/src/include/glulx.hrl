@@ -37,6 +37,7 @@
 -define(CALLFII,      16#162).
 -define(CALLFIII,     16#163).
 -define(COPY,         16#40).
+-define(COPYB,        16#42).
 -define(GESTALT,      16#100).
 -define(GETMEMSIZE,   16#102).
 -define(GLK,          16#130).
@@ -56,6 +57,7 @@
 -define(SUB,          16#11).
 -define(STKCOPY,      16#54).
 -define(STREAMCHAR,   16#70).
+-define(STREAMNUM,    16#71).
 -define(STREAMSTR,    16#72).
 
 -record(instr, {opcode, operands, address, opnum_len, length}).

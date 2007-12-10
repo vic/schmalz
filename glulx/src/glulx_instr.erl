@@ -26,6 +26,7 @@
 -export([execute/2, print_instr/3]).
 -include("include/glulx.hrl").
 -define(OPERAND_VALUE(Num), operand_value(MachinePid, Operands, Num)).
+-define(BYTE_OPERAND_VALUE(Num), byte_operand_value(MachinePid, Operands, Num)).
 -define(SIGNED_OPERAND_VALUE(Num),
 	glulx_util:unsigned_to_signed32(operand_value(MachinePid, Operands,
 						      Num))).
@@ -60,6 +61,7 @@ get_operation(OpcodeNum) ->
 	?CALLFII      -> fun callfii/2;
 	?CALLFIII     -> fun callfiii/2;
 	?COPY         -> fun copy/2;
+	?COPYB        -> fun copyb/2;
 	?GESTALT      -> fun gestalt/2;
 	?GETMEMSIZE   -> fun getmemsize/2;
 	?GLK          -> fun glk/2;
@@ -79,6 +81,7 @@ get_operation(OpcodeNum) ->
 	?SUB          -> fun sub/2;
 	?STKCOPY      -> fun stkcopy/2;
 	?STREAMCHAR   -> fun streamchar/2;
+	?STREAMNUM    -> fun streamnum/2;
 	?STREAMSTR    -> fun streamstr/2;
 	_Default      -> fun halt/2
     end.
@@ -206,6 +209,9 @@ callfiii(MachinePid, #instr{operands = Operands, address = InstrAddress,
 copy(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?OPERAND_VALUE(1), ?OPERAND(2)}).
 
+copyb(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_byte_value, ?BYTE_OPERAND_VALUE(1), ?OPERAND(2)}).
+
 getmemsize(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?call_machine(memsize), ?OPERAND(1)}).
 
@@ -276,6 +282,9 @@ stkcopy(MachinePid, #instr{operands = Operands}) ->
 streamchar(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({streamchar, ?OPERAND_VALUE(1)}).
 
+streamnum(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({streamnum, ?OPERAND_VALUE(1)}).
+
 streamstr(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({streamstr, ?OPERAND_VALUE(1)}).
 
@@ -297,11 +306,22 @@ operand_value(MachinePid, Operands, Num) ->
     case Type of
 	const    -> Value;
 	stack    -> ?pop();
+	memory   -> ?call_machine({get_word32, Value});
 	local    -> ?call_machine({get_local, Value});
 	ram      -> ?call_machine({get_ram_word32, Value});
 	_Default -> undef
     end.
 
+byte_operand_value(MachinePid, Operands, Num) ->
+    {Type, _} = ?OPERAND(Num),
+    Value32 = operand_value(MachinePid, Operands, Num),
+    if
+	Type =:= stack ->
+	    Value32 band 16#ff;
+	true ->
+	    (Value32 bsr 24) band 16#ff
+    end.
+    
 halt(MachinePid, _) ->
     ?call_machine({set_status, halt}).
 
@@ -320,6 +340,8 @@ operands_str([{const, Value} | Operands]) ->
     io_lib:format("#$~8.16.0B ", [Value]) ++ operands_str(Operands);
 operands_str([{stack, _} | Operands]) ->
     io_lib:format("(SP) ", []) ++ operands_str(Operands);
+operands_str([{memory, Value} | Operands]) ->
+    io_lib:format("MEM~8.16.0B ", [Value]) ++ operands_str(Operands);
 operands_str([{local, Value} | Operands]) ->
     io_lib:format("L~8.16.0B ", [Value]) ++ operands_str(Operands);
 operands_str([{ram, Value} | Operands]) ->
@@ -343,6 +365,7 @@ op_name(OpcodeNum) ->
 	?CALLFII      -> callfii;
 	?CALLFIII     -> callfiii;
 	?COPY         -> copy;
+	?COPYB        -> copyb;
 	?GESTALT      -> gestalt;
 	?GETMEMSIZE   -> getmemsize;
 	?GLK          -> glk;
@@ -362,6 +385,7 @@ op_name(OpcodeNum) ->
 	?SUB          -> sub;
 	?STKCOPY      -> stkcopy;
 	?STREAMCHAR   -> streamchar;
+	?STREAMNUM    -> streamnum;
 	?STREAMSTR    -> streamstr;
 	_Default      -> '???'
     end.

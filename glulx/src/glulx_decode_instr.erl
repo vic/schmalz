@@ -43,6 +43,7 @@ decode(MachinePid) ->
 	    OpNumLen = 1,
 	    OpcodeNum = First
     end,
+    %io:format("$~8.16.0B: OpcodeNum: #$~8.16.0B~n", [Address, OpcodeNum]),
     {OperandDataSize, Operands} = decode_operands(MachinePid,
 						  Address + OpNumLen,
 						  OpcodeNum),
@@ -66,6 +67,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?BITAND       -> 3;
 	?CALL         -> 3;
 	?COPY         -> 2;
+	?COPYB        -> 2;
 	?CALLF        -> 2;
 	?CALLFI       -> 3;
 	?CALLFII      -> 4;
@@ -89,6 +91,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?SUB          -> 3;
 	?STKCOPY      -> 1;
 	?STREAMCHAR   -> 1;
+	?STREAMNUM    -> 1;
 	?STREAMSTR    -> 1;
 	_Default      ->
 	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
@@ -102,7 +105,8 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 
 -define(is_constant(AddrMode), AddrMode > 0, AddrMode =< 3).
 -define(is_local(AddrMode), AddrMode >= 9, AddrMode =< 11).
--define(is_mem(AddrMode), AddrMode >= 13, AddrMode =< 15).
+-define(is_memory(AddrMode), AddrMode >= 5, AddrMode =< 7).
+-define(is_ram(AddrMode), AddrMode >= 13, AddrMode =< 15).
 -define(ADDRMODE_ZERO, 0).
 -define(ADDRMODE_STACK_TOP, 8).
 
@@ -145,6 +149,21 @@ get_operands(MachinePid, Address, [AddrMode | AddrModes])
 	    undef
     end;
 get_operands(MachinePid, Address, [AddrMode | AddrModes])
+  when ?is_memory(AddrMode) ->
+    case AddrMode of
+	5  ->
+	    [{memory, ?get_byte(Address)} |
+	     get_operands(MachinePid, Address + 1, AddrModes)];
+	6 ->
+	    [{memory, ?get_word16(Address)} |
+	     get_operands(MachinePid, Address + 2, AddrModes)];
+	7 ->
+	    [{memory, ?get_word32(Address)} |
+	     get_operands(MachinePid, Address + 4, AddrModes)];
+	_Default ->
+	    undef
+    end;
+get_operands(MachinePid, Address, [AddrMode | AddrModes])
   when ?is_local(AddrMode) ->
     case AddrMode of
 	9  ->
@@ -160,7 +179,7 @@ get_operands(MachinePid, Address, [AddrMode | AddrModes])
 	    undef
     end;
 get_operands(MachinePid, Address, [AddrMode | AddrModes])
-  when ?is_mem(AddrMode) ->
+  when ?is_ram(AddrMode) ->
     case AddrMode of
 	13  ->
 	    [{ram, ?get_byte(Address)} |

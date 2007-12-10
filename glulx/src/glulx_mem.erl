@@ -35,7 +35,7 @@
 -module(glulx_mem).
 -export([read_file/1, header/1, memsize/1,
 	 get_byte/2, get_word16/2, get_word32/2, get_ram_word32/2,
-	 set_byte/3, set_word32/3, set_ram_word32/3,
+	 set_byte/3, set_ram_byte/3, set_word32/3, set_ram_word32/3,
 	 get_bit/3]).
 -include("include/glulx.hrl").
 
@@ -83,6 +83,11 @@ get_ram_word32(Memory, RamOffset) ->
 
 set_byte(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 8, Value).
 set_word32(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 32, Value).
+
+set_ram_byte(Memory, RamOffset, Value) ->
+    Header = header(Memory),
+    set_bits(Memory, Header#glulx_header.ram_start + RamOffset, 8,
+	     Value band 16#ff).
 
 set_ram_word32(Memory, RamOffset, Value) ->
     Header = header(Memory),

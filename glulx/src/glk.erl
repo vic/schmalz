@@ -57,8 +57,13 @@ listen(GlkState0) ->
 	    Operation = get_op(Selector),
 	    {GlkResult, GlkState1} = Operation(GlkState0, GlkArgs),
 	    %io:format("GLK API RESULT ~p~n", [GlkResult]),
-	    io:format("GLK STATE ~p~n", [GlkState1]),
 	    ack(From, GlkResult),
+	    %io:format("GLK STATE ~p~n", [GlkState1]),
+	    listen(GlkState1);
+	{From, {glk_put_string, String}} ->
+	    {GlkResult, GlkState1} = glk_put_string(GlkState0, String),
+	    ack(From, GlkResult),
+	    %io:format("GLK STATE ~p~n", [GlkState1]),
 	    listen(GlkState1);
 	{From, Other} ->
 	    ack(From, {error, Other}),
@@ -75,6 +80,7 @@ get_op(Selector) ->
 	?GLK_STREAM_ITERATE  -> fun glk_stream_iterate/2;
 	?GLK_FILEREF_ITERATE -> fun glk_fileref_iterate/2;
 	?GLK_PUT_CHAR        -> fun glk_put_char/2;
+	?GLK_SET_STYLE       -> fun glk_set_style/2;
 	_Default -> undef
     end.
 
@@ -88,6 +94,7 @@ get_op(Selector) ->
 -record(glk_stream, {id, type, ref}).
 init_streams() -> {1, []}.
 
+%% Iterates through the currently available streams (TODO)
 glk_stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
     Stream = 0,
@@ -97,10 +104,12 @@ glk_stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
     end,
     {?GLK_RESULT_CB(Stream, VmCallbacks), GlkState0}.
 
+%% Adds a new stream to the stream list
 add_stream(#glk_state{streams = {NextId, Streams}} = GlkState0, Type, Ref) ->
     Stream = #glk_stream{id = NextId, type = Type, ref = Ref},
     GlkState0#glk_state{streams = {NextId + 1, Streams ++ [Stream]}}.
 
+%% Writes a Latin1 character to the currently active stream
 glk_put_char(#glk_state{active_stream = ActiveStreamId,
 			streams = {_, Streams}} = GlkState0, [Char]) ->
     CurrentStream = get_stream(Streams, ActiveStreamId),
@@ -110,10 +119,35 @@ glk_put_char(#glk_state{active_stream = ActiveStreamId,
 stream_put_char(GlkState0, #glk_stream{type = window, ref = WindowId}, Char) ->
     window_put_char(GlkState0, WindowId, Char).
 
+%% Writes a string to the currently active stream, this is an optimization
+%% function
+glk_put_string(#glk_state{active_stream = ActiveStreamId,
+			  streams = {_, Streams}} = GlkState0, [String]) ->
+    CurrentStream = get_stream(Streams, ActiveStreamId),
+    GlkState1 = stream_put_string(GlkState0, CurrentStream, String),
+    {?GLK_RESULT_VOID, GlkState1}.
+
+stream_put_string(GlkState0, #glk_stream{type = window, ref = WindowId},
+		  String) ->
+    window_put_string(GlkState0, WindowId, String).
+
 get_stream(Streams, ActiveStreamId) ->
     lists:last(lists:filter(fun (Stream) ->
 				    Stream#glk_stream.id =:= ActiveStreamId
 			    end, Streams)).
+
+%% Sets the output style for the current active stream
+glk_set_style(#glk_state{active_stream = ActiveStreamId,
+			 streams = {_, Streams}} = GlkState0, [Style]) ->
+    CurrentStream = get_stream(Streams, ActiveStreamId),
+    GlkState1 = stream_set_style(GlkState0, CurrentStream, Style),
+    {?GLK_RESULT_VOID, GlkState1}.
+
+% Only window streams support styles
+stream_set_style(GlkState0, #glk_stream{type = window, ref = WindowId},
+		 Style) ->
+    window_set_style(GlkState0, WindowId, Style);
+stream_set_style(GlkState0, _, _) -> GlkState0.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Glk Window system
@@ -123,22 +157,6 @@ get_stream(Streams, ActiveStreamId) ->
 %%%%% management simple. Window operations are implemented using
 %%%%% Depth-First-Search, which is easy to implement.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
--define(WINTYPE_ALL,            0).
--define(WINTYPE_PAIR,           1).
--define(WINTYPE_BLANK,          2).
--define(WINTYPE_TEXTBUFFER,     3).
--define(WINTYPE_TEXTGRID,       4).
--define(WINTYPE_GRAPHICS,       5).
-
--define(WINMETHOD_LEFT,         16#0).
--define(WINMETHOD_RIGHT,        16#1).
--define(WINMETHOD_ABOVE,        16#2).
--define(WINMETHOD_BELOW,        16#3).
--define(WINMETHOD_DIRMASK,      16#f).
--define(WINMETHOD_FIXED,        16#10).
--define(WINMETHOD_PROPORTIONAL, 16#20).
--define(WINMETHOD_DIVISIONMASK, 16#f0).
 
 -record(glk_pair_window, {id, direction, division_type,
 			  child1, size1, child2, size2}).
@@ -240,7 +258,7 @@ create_pair_window(ParentWindow, #glk_window{id = ChildId} = ChildWindow,
 		     child1 = First, size1 = Size1,
 		     child2 = Second, size2 = Size2}.
     
-
+%% Selects the specified window as the current output target
 glk_set_window(#glk_state{streams = {_, Streams}} = GlkState0, [WindowId]) ->
     {?GLK_RESULT_VOID,
      GlkState0#glk_state{active_stream = window_stream(Streams, WindowId)}}.
@@ -250,22 +268,50 @@ window_stream([#glk_stream{id = Id, type = window, ref = WindowId} | _Streams],
 	       WindowId) -> Id;
 window_stream([_ | Streams], WindowId) -> window_stream(Streams, WindowId).
 
+%% Writes a character to the specified window stream
 window_put_char(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
 		WindowId, Char) ->
     GlkState0#glk_state{windows =
-			{NextId, window_put_char2(WindowTree, WindowId, Char)}}.
+			{NextId, window_put_string(WindowTree, WindowId,
+						   [Char])}}.
 
-window_put_char2(#glk_window{id = WindowId, buffer = Buffer} = GlkWindow0,
-		 WindowId, Char) ->
-    GlkWindow0#glk_window{buffer = Buffer ++ [Char]};
-window_put_char2(#glk_window{id = _SomeWindowId}, _WindowId, _) -> notfound;
-window_put_char2(#glk_pair_window{child1 = Child1, child2 = Child2}
-		 = PairWindow0, WindowId, Char) ->
-    WindowTree = window_put_char2(Child1, WindowId, Char),
+window_set_style(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
+		 WindowId, Style) ->
+    case Style of
+	?STYLE_NORMAL       -> StyleString = "{STYLE_NORMAL->}";
+	?STYLE_EMPHASIZED   -> StyleString = "{STYLE_EMPHASIZED->}";
+	?STYLE_PREFORMATTED -> StyleString = "{STYLE_PREFORMATTED->}";
+	?STYLE_HEADER       -> StyleString = "{STYLE_HEADER->}";
+	?STYLE_SUBHEADER    -> StyleString = "{STYLE_SUBHEADER->}";
+	?STYLE_ALERT        -> StyleString = "{STYLE_ALERT->}";
+	?STYLE_NOTE         -> StyleString = "{STYLE_NOTE->}";
+	?STYLE_BLOCKQUOTE   -> StyleString = "{STYLE_BLOCKQUOTE->}";
+	?STYLE_INPUT        -> StyleString = "{STYLE_INPUT->}";
+	?STYLE_USER1        -> StyleString = "{STYLE_USER1->}";
+	?STYLE_USER2        -> StyleString = "{STYLE_USER2->}";
+	_Default            -> StyleString = "{STYLE_UNDEF->}"
+    end,
+    GlkState0#glk_state{windows =
+			{NextId, window_put_string(WindowTree, WindowId,
+						   StyleString)}}.
+
+%% All-purpose window printing
+window_put_string(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
+		  WindowId, String) ->
+    GlkState0#glk_state{windows =
+			{NextId, window_put_string(WindowTree, WindowId,
+						   String)}};
+window_put_string(#glk_window{id = WindowId, buffer = Buffer} = GlkWindow0,
+		  WindowId, String) ->
+    GlkWindow0#glk_window{buffer = Buffer ++ String};
+window_put_string(#glk_window{id = _SomeWindowId}, _WindowId, _) -> notfound;
+window_put_string(#glk_pair_window{child1 = Child1, child2 = Child2}
+		  = PairWindow0, WindowId, String) ->
+    WindowTree = window_put_string(Child1, WindowId, String),
     case WindowTree of
 	notfound ->
 	    PairWindow0#glk_pair_window{
-	      child2 = window_put_char2(Child2, WindowId, Char)};
+	      child2 = window_put_string(Child2, WindowId, String)};
 	_Default ->
 	    PairWindow0#glk_pair_window{child1 = WindowTree}
     end.

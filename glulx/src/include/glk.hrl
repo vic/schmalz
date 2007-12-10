@@ -19,6 +19,7 @@
 %%%
 %%%-----------------------------------------------------------------------
 
+% GLK Selectors
 -define(GLK_WINDOW_ITERATE,  16#20).
 -define(GLK_WINDOW_OPEN,     16#23).
 -define(GLK_SET_WINDOW,      16#2f).
@@ -27,8 +28,37 @@
 -define(GLK_PUT_CHAR,        16#80).
 -define(GLK_SET_STYLE,       16#86).
 
+% Macros
 -define(GLK_RESULT(RetVal), {glk_result, RetVal, []}).
 -define(GLK_RESULT_CB(RetVal, VmCallbacks), {glk_result, RetVal, VmCallbacks}).
 -define(GLK_RESULT_VOID, {glk_result, 0, []}).
-
 -define(call_glk(Message), glk:rpc(GlkPid, Message)).
+
+% Window constants
+-define(WINTYPE_ALL,            0).
+-define(WINTYPE_PAIR,           1).
+-define(WINTYPE_BLANK,          2).
+-define(WINTYPE_TEXTBUFFER,     3).
+-define(WINTYPE_TEXTGRID,       4).
+-define(WINTYPE_GRAPHICS,       5).
+
+-define(WINMETHOD_LEFT,         16#0).
+-define(WINMETHOD_RIGHT,        16#1).
+-define(WINMETHOD_ABOVE,        16#2).
+-define(WINMETHOD_BELOW,        16#3).
+-define(WINMETHOD_DIRMASK,      16#f).
+-define(WINMETHOD_FIXED,        16#10).
+-define(WINMETHOD_PROPORTIONAL, 16#20).
+-define(WINMETHOD_DIVISIONMASK, 16#f0).
+
+-define(STYLE_NORMAL,           0).
+-define(STYLE_EMPHASIZED,       1).
+-define(STYLE_PREFORMATTED,     2).
+-define(STYLE_HEADER,           3).
+-define(STYLE_SUBHEADER,        4).
+-define(STYLE_ALERT,            5).
+-define(STYLE_NOTE,             6).
+-define(STYLE_BLOCKQUOTE,       7).
+-define(STYLE_INPUT,            8).
+-define(STYLE_USER1,            9).
+-define(STYLE_USER2,            10).

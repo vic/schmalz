@@ -136,6 +136,10 @@ listen(#glulx_vm{memory = Memory, value_stack = ValueStack, pc = PC,
 	    %io:format("CallFrame after: ~p~n", [CallFrame]),
 	    ack(From, ok),
 	    listen(MachineState1);
+	{From, {store_byte_value, Value, Dest}} ->
+	    MachineState1 = store_byte_value(MachineState0, Value, Dest),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, {binarysearch, Key, KeySize, Start, StructSize, NumStructs,
 	        KeyOffset, Options}} ->
 	    Result = binarysearch(Memory, Key, KeySize, Start, StructSize,
@@ -163,10 +167,14 @@ listen(#glulx_vm{memory = Memory, value_stack = ValueStack, pc = PC,
 		call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
 	    ack(From, ok),
 	    listen(MachineState1);
-	{From, {streamstr, StrAddress}} ->
-	    streamstr(MachineState0, StrAddress),
+	{From, {streamnum, Number}} ->
+	    streamnum(MachineState0, Number),
 	    ack(From, ok),
 	    listen(MachineState0);
+	{From, {streamstr, StrAddress}} ->
+	    MachineState1 = streamstr(MachineState0, StrAddress),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, Other} ->
 	    io:format("UNKNOWN GLULX OP: ~p~n", Other),
 	    ack(From, {error, Other}),
@@ -271,13 +279,27 @@ pop(#glulx_vm{value_stack = [TopValue | Stack]} = MachineState0) ->
 push(#glulx_vm{value_stack = Stack} = MachineState0, Value) ->
     MachineState0#glulx_vm{value_stack = [Value|Stack]}.
 
+%% Stores a 32 bit value
 store_value(MachineState0, _Value, {const, 0}) -> MachineState0;
 store_value(MachineState0, Value, {stack, _}) ->
     push(MachineState0, Value);
+store_value(MachineState0, Value, {memory, ByteAddress}) ->
+    set_word32(MachineState0, ByteAddress, Value);
 store_value(MachineState0, Value, {local, Address}) ->
     set_local(MachineState0, Address, Value);
 store_value(MachineState0, Value, {ram, RamOffset}) ->
     set_ram_word32(MachineState0, RamOffset, Value).
+
+% Stores an 8 bit value
+store_byte_value(MachineState0, _Value, {const, 0}) -> MachineState0;
+store_byte_value(MachineState0, Value, {stack, _}) ->
+    push(MachineState0, Value);
+store_byte_value(MachineState0, Value, {memory, ByteAddress}) ->
+    set_byte(MachineState0, ByteAddress, Value);
+store_byte_value(MachineState0, Value, {local, Address}) ->
+    set_local(MachineState0, Address, Value band 16#ff);
+store_byte_value(MachineState0, Value, {ram, RamOffset}) ->
+    set_ram_byte(MachineState0, RamOffset, Value).
 
 get_local(#glulx_vm{call_stack  = [#call_frame{locals = Locals} |
 				   _CallStack]}, Address) ->
@@ -319,6 +341,11 @@ set_local_list(Locals, Index, NewValue) ->
 %% Sets the 32 bit word at the specified RAM address
 set_ram_word32(#glulx_vm{memory = Memory} = MachineState0, RamOffset, Value) ->
     MachineState0#glulx_vm{memory = glulx_mem:set_ram_word32(
+				      Memory, RamOffset, Value)}.
+
+%% Sets the 32 bit word at the specified RAM address
+set_ram_byte(#glulx_vm{memory = Memory} = MachineState0, RamOffset, Value) ->
+    MachineState0#glulx_vm{memory = glulx_mem:set_ram_byte(
 				      Memory, RamOffset, Value)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -401,6 +428,8 @@ search_key_to_list(_Memory, Key, 4, false) ->
 %%% Binary Search
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-define(SEARCH_NOT_FOUND, -1).
+
 %% public interface to binary search
 binarysearch(Memory, Key, KeySize, Start, StructSize, NumStructs, KeyOffset,
 	     Options) ->
@@ -415,8 +444,11 @@ binarysearch(Memory, Key, KeySize, Start, StructSize, NumStructs, KeyOffset,
 	       {KeyIndirect, ZeroKeyTerminates}}),
     io:format("RESULT OF BINSEARCH: ~w~n", [Index]),
     if
-	ReturnIndex -> Index;
-	true        -> Start + Index * StructSize
+	Index =:= ?SEARCH_NOT_FOUND, ReturnIndex      -> -1;
+	Index =:= ?SEARCH_NOT_FOUND, not ReturnIndex  -> 0;
+	Index /= ?SEARCH_NOT_FOUND,  not ReturnIndex  ->
+	    Start + Index * StructSize;
+	true                                          -> Index
     end.
 
 binsearch(_Memory, _Key, Left, Right,
@@ -477,31 +509,42 @@ call_glk(#glulx_vm{glk_pid = GlkPid} = MachineState0, Identifier, GlkArgs) ->
     %io:format ("RESULT FROM GLK: (~w, ~p)~n", [ReturnValue, VmCallbacks]),
     {ReturnValue, glk_vm_callbacks(MachineState0, VmCallbacks)}.
 
+call_glk_direct(#glulx_vm{glk_pid = GlkPid} = MachineState0, Function,
+		GlkArgs) ->
+    {glk_result, ReturnValue, VmCallbacks} = ?call_glk({Function, GlkArgs}),
+    {ReturnValue, glk_vm_callbacks(MachineState0, VmCallbacks)}.
+
 glk_vm_callbacks(MachineState0, []) -> MachineState0;
 glk_vm_callbacks(MachineState0, [{Callback, Params} | VmActions]) ->
     MachineState1 = apply(glulx_vm, Callback, [MachineState0 | Params]),
     glk_vm_callbacks(MachineState1, VmActions).
 
+%% Sends the string representation of the specified integer to the
+%% active Glk string 
+streamnum(MachineState0, Number) ->
+    glk_put_string(MachineState0, integer_to_list(Number)).
+
+%% Sends the string at the specified Address to the active Glk stream
 streamstr(#glulx_vm{memory = Memory} = MachineState0, StrAddress) ->
     TypeByte = glulx_mem:get_byte(Memory, StrAddress),
     case TypeByte of
 	16#e0    ->
 	    io:fwrite("UNCOMPRESSED LATIN1-STRING~n");
 	16#e1    ->
-	    io:fwrite("COMPRESSED STRING~n"),
-	    glk_put_string_latin1(MachineState0,
-				  decompress(Memory, StrAddress + 1));
+	    %io:fwrite("COMPRESSED STRING~n"),
+	    glk_put_string(MachineState0,
+			   decompress(Memory, StrAddress + 1));
 	16#e2    ->
 	    io:fwrite("UNCOMPRESSED UNICODE STRING~n");
 	_Default ->    
 	    io:format("UNKNOWN STRING TYPE: ~4.16.0B~n", [TypeByte])
-    end.
+    end,
+    MachineState0.
 
-% TODO Optimize: Send whole string
-glk_put_string_latin1(MachineState0, []) -> MachineState0;
-glk_put_string_latin1(MachineState0, [Latin1Char | String]) ->
-    call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
-    glk_put_string_latin1(MachineState0, String).
+%% Sends a whole string to the current Glk stream, optimization to avoid
+%% sending each character separately
+glk_put_string(MachineState0, String) ->
+    call_glk_direct(MachineState0, glk_put_string, [String]).
 
 % Setup Huffman decoding
 decompress(Memory, Address) ->
@@ -509,10 +552,10 @@ decompress(Memory, Address) ->
     DecodeTable = Header#glulx_header.decode_table,
     RootNodeAddr = glulx_mem:get_word32(Memory, DecodeTable + 8),
     Rev = decompress(Memory, RootNodeAddr, RootNodeAddr, Address, 0, []),
-    io:format("DECODE TABLE ADDRESS: $~8.16.0B, "
-	      "ROOT NODE ADDR: $~8.16.0B, String: ~p~n",
-	      [DecodeTable, RootNodeAddr,
-	       lists:reverse(Rev)]),
+    %io:format("DECODE TABLE ADDRESS: $~8.16.0B, "
+	%      "ROOT NODE ADDR: $~8.16.0B, String: ~p~n",
+	%      [DecodeTable, RootNodeAddr,
+	%       lists:reverse(Rev)]),
     lists:reverse(Rev).
 
 % recursive Huffman decoder
