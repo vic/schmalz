@@ -29,9 +29,9 @@
 decode(MachinePid) ->
     Address = ?call_machine(pc),
     First = ?get_byte(Address),
-    %Masked = First band 2#11000000,
+%    Masked = First band 2#11000000,
     %io:format("byte at $~8.16.0B: ~w, masked: ~16.2.0B~n",
-	%      [Address, First, Masked]),
+%	      [Address, First, Masked]),
     case First band 2#11000000 of
 	2#11000000 ->
 	    OpNumLen = 4,
@@ -89,6 +89,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?SUB          -> 3;
 	?STKCOPY      -> 1;
 	?STREAMCHAR   -> 1;
+	?STREAMSTR    -> 1;
 	_Default      ->
 	    io:format("unknown opcode at $~8.16.0B: #$~8.16.0B~n",
 		      [Address, OpcodeNum])

@@ -35,7 +35,8 @@
 -module(glulx_mem).
 -export([read_file/1, header/1, memsize/1,
 	 get_byte/2, get_word16/2, get_word32/2, get_ram_word32/2,
-	 set_word32/3, set_ram_word32/3]).
+	 set_byte/3, set_word32/3, set_ram_word32/3,
+	 get_bit/3]).
 -include("include/glulx.hrl").
 
 %% reads the game from the specified file and returns a Memory object
@@ -80,11 +81,19 @@ get_ram_word32(Memory, RamOffset) ->
     Header = header(Memory),
     get_bits(Memory, Header#glulx_header.ram_start + RamOffset, 32).
 
+set_byte(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 8, Value).
 set_word32(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 32, Value).
 
 set_ram_word32(Memory, RamOffset, Value) ->
     Header = header(Memory),
     set_bits(Memory, Header#glulx_header.ram_start + RamOffset, 32, Value).
+
+%% @spec get_bit(binary(), int(), int()) -> int().
+get_bit(Memory, ByteNum, BitIndex) ->
+    RemainBits = 8 - (BitIndex + 1),
+    {_, MemChunk, Address} = memchunk_address(Memory, ByteNum),
+    <<_:Address/binary, _:RemainBits, Bit:1, _:BitIndex, _/binary>> = MemChunk,
+    Bit.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Helper functionality

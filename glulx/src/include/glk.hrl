@@ -25,6 +25,7 @@
 -define(GLK_STREAM_ITERATE,  16#40).
 -define(GLK_FILEREF_ITERATE, 16#64).
 -define(GLK_PUT_CHAR,        16#80).
+-define(GLK_SET_STYLE,       16#86).
 
 -define(GLK_RESULT(RetVal), {glk_result, RetVal, []}).
 -define(GLK_RESULT_CB(RetVal, VmCallbacks), {glk_result, RetVal, VmCallbacks}).

@@ -58,12 +58,13 @@ rpc(MachinePid, Message) ->
     MachinePid ! {self(), Message},
     receive
 	{MachinePid, Response} -> Response
-    after 500 ->
+    after 5000 ->
         io:format("waiting for ack timed out"),
 	halt
     end.
 
-listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
+listen(#glulx_vm{memory = Memory, value_stack = ValueStack, pc = PC,
+		 status = Status} = MachineState0) ->
     receive
 	{From, pc} ->
 	    ack(From, PC),
@@ -111,6 +112,10 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	{From, {get_ram_word32, Address}} ->
 	    ack(From, glulx_mem:get_ram_word32(Memory, Address)),
 	    listen(MachineState0);
+	{From, {set_byte, Address, Value}} ->
+	    MachineState1 = set_byte(MachineState0, Address, Value),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, {set_word32, Address, Value}} ->
 	    MachineState1 = set_word32(MachineState0, Address, Value),
 	    ack(From, ok),
@@ -121,6 +126,9 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 	    listen(MachineState1);
 	{From, {get_local, Address}} ->
 	    ack(From, get_local(MachineState0, Address)),
+	    listen(MachineState0);
+	{From, get_stack} ->
+	    ack(From, ValueStack),
 	    listen(MachineState0);
 	{From, {store_value, Value, Dest}} ->
 	    MachineState1 = store_value(MachineState0, Value, Dest),
@@ -155,6 +163,10 @@ listen(#glulx_vm{memory = Memory, pc = PC, status = Status} = MachineState0) ->
 		call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
 	    ack(From, ok),
 	    listen(MachineState1);
+	{From, {streamstr, StrAddress}} ->
+	    streamstr(MachineState0, StrAddress),
+	    ack(From, ok),
+	    listen(MachineState0);
 	{From, Other} ->
 	    io:format("UNKNOWN GLULX OP: ~p~n", Other),
 	    ack(From, {error, Other}),
@@ -469,7 +481,103 @@ glk_vm_callbacks(MachineState0, []) -> MachineState0;
 glk_vm_callbacks(MachineState0, [{Callback, Params} | VmActions]) ->
     MachineState1 = apply(glulx_vm, Callback, [MachineState0 | Params]),
     glk_vm_callbacks(MachineState1, VmActions).
-    
+
+streamstr(#glulx_vm{memory = Memory} = MachineState0, StrAddress) ->
+    TypeByte = glulx_mem:get_byte(Memory, StrAddress),
+    case TypeByte of
+	16#e0    ->
+	    io:fwrite("UNCOMPRESSED LATIN1-STRING~n");
+	16#e1    ->
+	    io:fwrite("COMPRESSED STRING~n"),
+	    glk_put_string_latin1(MachineState0,
+				  decompress(Memory, StrAddress + 1));
+	16#e2    ->
+	    io:fwrite("UNCOMPRESSED UNICODE STRING~n");
+	_Default ->    
+	    io:format("UNKNOWN STRING TYPE: ~4.16.0B~n", [TypeByte])
+    end.
+
+% TODO Optimize: Send whole string
+glk_put_string_latin1(MachineState0, []) -> MachineState0;
+glk_put_string_latin1(MachineState0, [Latin1Char | String]) ->
+    call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
+    glk_put_string_latin1(MachineState0, String).
+
+% Setup Huffman decoding
+decompress(Memory, Address) ->
+    Header = glulx_mem:header(Memory),
+    DecodeTable = Header#glulx_header.decode_table,
+    RootNodeAddr = glulx_mem:get_word32(Memory, DecodeTable + 8),
+    Rev = decompress(Memory, RootNodeAddr, RootNodeAddr, Address, 0, []),
+    io:format("DECODE TABLE ADDRESS: $~8.16.0B, "
+	      "ROOT NODE ADDR: $~8.16.0B, String: ~p~n",
+	      [DecodeTable, RootNodeAddr,
+	       lists:reverse(Rev)]),
+    lists:reverse(Rev).
+
+% recursive Huffman decoder
+decompress(Memory, RootNodeAddr, CurrentNodeAddr, CurrentByteAddr,
+	   BitNum, String) ->
+    %ByteDebug = glulx_mem:get_byte(Memory, CurrentByteAddr),
+    %BitDebug = glulx_mem:get_bit(Memory, CurrentByteAddr, BitNum),
+    NodeType = glulx_mem:get_byte(Memory, CurrentNodeAddr),
+    %io:format("DECOMPRESS NODE: $~8.16.0B, Type: ~w, ADDRESS: $~8.16.0B, "
+	%      "BitIndex: ~w, Byte: ~16.2.0B, Bit: ~w~n",
+    	 %     [CurrentNodeAddr, NodeType, CurrentByteAddr, BitNum, ByteDebug, BitDebug]),
+    case BitNum of
+	7        ->
+	    NextByteAddr = CurrentByteAddr + 1,
+	    NextBitNum = 0;
+	_ ->
+	    NextByteAddr = CurrentByteAddr,
+	    NextBitNum = BitNum + 1
+    end,
+    case NodeType of
+	0 ->
+	    % Branch
+	    %io:fwrite("CURRENT NODE is a branch~n"),
+	    Bit = glulx_mem:get_bit(Memory, CurrentByteAddr, BitNum),
+	    NextNodeAddr = glulx_mem:get_word32(Memory, CurrentNodeAddr + 1 +
+						4 * Bit),
+	    decompress(Memory, RootNodeAddr, NextNodeAddr, NextByteAddr,
+		       NextBitNum, String);
+	1 ->
+	    % String terminator
+	    %io:fwrite("CURRENT NODE is a string terminator~n"),
+	    String;
+	2 ->
+	    % Single character
+	    %io:fwrite("CURRENT NODE is a single character~n"),
+	    Char = glulx_mem:get_byte(Memory, CurrentNodeAddr + 1),
+	    decompress(Memory, RootNodeAddr, RootNodeAddr, CurrentByteAddr,
+		       BitNum, [Char|String]);
+	3 ->
+	    % C-style string
+	    NewString = append_cstring(String, Memory, CurrentNodeAddr + 1),
+	    %io:fwrite("CURRENT NODE is a C style string: ~p~n",
+		%     [lists:reverse(NewString)]),
+	    decompress(Memory, RootNodeAddr, RootNodeAddr, CurrentByteAddr,
+		       BitNum, NewString);
+	4 ->
+	    % Single unicode character
+	    io:fwrite("CURRENT NODE is a unicode character~n");
+	5 ->
+	    % C-style unicode string
+	    io:fwrite("CURRENT NODE is a C style unicode string~n");
+	8 ->
+	    % indirect reference
+	    io:fwrite("CURRENT NODE is an indirect reference~n");
+	_ ->
+	    io:format("CURRENT NODE is an unknown type: ~w~n", [NodeType])
+    end.
+
+append_cstring(String, Memory, Address) -> 
+    Char = glulx_mem:get_byte(Memory, Address),
+    if
+	Char =:= 0 -> String;
+	true -> append_cstring([Char | String], Memory, Address + 1)
+    end.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% GLK Callbacks
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -478,3 +586,6 @@ set_word32(#glulx_vm{memory = Memory} = MachineState0, Address, Value) ->
     MachineState0#glulx_vm{
       memory = glulx_mem:set_word32(Memory, Address, Value)}.
 
+set_byte(#glulx_vm{memory = Memory} = MachineState0, Address, Value) ->
+    MachineState0#glulx_vm{
+      memory = glulx_mem:set_byte(Memory, Address, Value)}.

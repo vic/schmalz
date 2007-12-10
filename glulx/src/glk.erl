@@ -44,7 +44,7 @@ rpc(GlkPid, Message) ->
     GlkPid ! {self(), Message},
     receive
 	{GlkPid, Response} -> Response
-    after 500 ->
+    after 5000 ->
         io:format("waiting for ack timed out"),
 	halt
     end.
@@ -56,7 +56,7 @@ listen(GlkState0) ->
 		      [Selector, func_name(Selector), GlkArgs]),
 	    Operation = get_op(Selector),
 	    {GlkResult, GlkState1} = Operation(GlkState0, GlkArgs),
-	    %io:format("GLK API RESULT ~p~n", [Result]),
+	    %io:format("GLK API RESULT ~p~n", [GlkResult]),
 	    io:format("GLK STATE ~p~n", [GlkState1]),
 	    ack(From, GlkResult),
 	    listen(GlkState1);
@@ -250,20 +250,24 @@ window_stream([#glk_stream{id = Id, type = window, ref = WindowId} | _Streams],
 	       WindowId) -> Id;
 window_stream([_ | Streams], WindowId) -> window_stream(Streams, WindowId).
 
-window_put_char(#glk_state{windows = {_, WindowTree}} = GlkState0,
+window_put_char(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
 		WindowId, Char) ->
-    GlkState0#glk_state{windows = window_put_char2(WindowTree, WindowId, Char)}.
+    GlkState0#glk_state{windows =
+			{NextId, window_put_char2(WindowTree, WindowId, Char)}}.
 
 window_put_char2(#glk_window{id = WindowId, buffer = Buffer} = GlkWindow0,
 		 WindowId, Char) ->
     GlkWindow0#glk_window{buffer = Buffer ++ [Char]};
 window_put_char2(#glk_window{id = _SomeWindowId}, _WindowId, _) -> notfound;
-window_put_char2(#glk_pair_window{child1 = Child1, child2 = Child2},
-		 WindowId, Char) ->
+window_put_char2(#glk_pair_window{child1 = Child1, child2 = Child2}
+		 = PairWindow0, WindowId, Char) ->
     WindowTree = window_put_char2(Child1, WindowId, Char),
     case WindowTree of
-	notfound -> window_put_char2(Child2, WindowId, Char);
-	_Default -> WindowTree
+	notfound ->
+	    PairWindow0#glk_pair_window{
+	      child2 = window_put_char2(Child2, WindowId, Char)};
+	_Default ->
+	    PairWindow0#glk_pair_window{child1 = WindowTree}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -288,5 +292,6 @@ func_name(Selector) ->
 	?GLK_STREAM_ITERATE  -> glk_stream_iterate;
 	?GLK_FILEREF_ITERATE -> glk_fileref_iterate;
 	?GLK_PUT_CHAR        -> glk_put_char;
+	?GLK_SET_STYLE       -> glk_set_style;
 	_Default -> '(unknown glk selector)'
     end. 

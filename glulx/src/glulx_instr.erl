@@ -23,7 +23,7 @@
 %%%-----------------------------------------------------------------------
 
 -module(glulx_instr).
--export([execute/2, print_instr/2]).
+-export([execute/2, print_instr/3]).
 -include("include/glulx.hrl").
 -define(OPERAND_VALUE(Num), operand_value(MachinePid, Operands, Num)).
 -define(SIGNED_OPERAND_VALUE(Num),
@@ -51,6 +51,7 @@ get_operation(OpcodeNum) ->
 	?ALOADBIT     -> fun aloadbit/2;
 	?ALOADS       -> fun aloads/2;
 	?ASTORE       -> fun astore/2;
+	?ASTOREBIT    -> fun astorebit/2;
 	?BINARYSEARCH -> fun binarysearch/2;
 	?BITAND       -> fun bitand/2;
 	?CALL         -> fun call/2;
@@ -78,6 +79,7 @@ get_operation(OpcodeNum) ->
 	?SUB          -> fun sub/2;
 	?STKCOPY      -> fun stkcopy/2;
 	?STREAMCHAR   -> fun streamchar/2;
+	?STREAMSTR    -> fun streamstr/2;
 	_Default      -> fun halt/2
     end.
 
@@ -149,6 +151,19 @@ aloads(MachinePid, #instr{operands = Operands}) ->
 astore(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({set_word32, ?OPERAND_VALUE(1) + 4 * ?OPERAND_VALUE(2),
 		   ?OPERAND_VALUE(3)}).
+
+astorebit(MachinePid, #instr{operands = Operands}) ->
+    {ByteAddr, BitNum} = bit_pos(?OPERAND_VALUE(1), ?SIGNED_OPERAND_VALUE(2)),
+    Byte = ?call_machine({get_byte, ByteAddr}),
+    BitMask = 2#10000000 bsr (7 - BitNum),
+    case ?OPERAND_VALUE(3) of
+	0        ->
+	    ClearMask = (bnot BitMask) band 16#ff,
+	    SetByte = Byte band ClearMask;
+	_Default ->
+	    SetByte = Byte bor BitMask
+    end,
+    ?call_machine({set_byte, ByteAddr, SetByte band 16#ff}).
 
 binarysearch(MachinePid, #instr{operands = Operands}) ->
     Result = ?call_machine({binarysearch, ?OPERAND_VALUE(1), ?OPERAND_VALUE(2),
@@ -261,6 +276,9 @@ stkcopy(MachinePid, #instr{operands = Operands}) ->
 streamchar(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({streamchar, ?OPERAND_VALUE(1)}).
 
+streamstr(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({streamstr, ?OPERAND_VALUE(1)}).
+
 branch_or_advance(MachinePid, false, _Offset, Instruction) ->
     ?call_machine({inc_pc, Instruction#instr.length});
 branch_or_advance(MachinePid, true, 0, _Instruction) ->
@@ -291,10 +309,11 @@ halt(MachinePid, _) ->
 %%%%% print_instr
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-print_instr(#instr{opcode = OpcodeNum, address = Address,
+print_instr(MachinePid, #instr{opcode = OpcodeNum, address = Address,
 		   operands = Operands}, Num) ->
-    io:format("~p - $~8.16.0B @~w ~s~n", [Num, Address, op_name(OpcodeNum),
-					  operands_str(Operands)]).
+    io:format("~p - $~8.16.0B @~w ~s St: ~p ~n",
+	      [Num, Address, op_name(OpcodeNum), operands_str(Operands),
+	       ?call_machine(get_stack)]).
 
 operands_str([]) -> "";
 operands_str([{const, Value} | Operands]) ->
@@ -343,5 +362,6 @@ op_name(OpcodeNum) ->
 	?SUB          -> sub;
 	?STKCOPY      -> stkcopy;
 	?STREAMCHAR   -> streamchar;
+	?STREAMSTR    -> streamstr;
 	_Default      -> '???'
     end.

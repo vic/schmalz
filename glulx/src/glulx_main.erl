@@ -28,7 +28,7 @@
 
 -ifdef(DEBUG).
 -define(print_instruction(Instruction),
-	glulx_instr:print_instr(Instruction, Num)).
+	glulx_instr:print_instr(MachinePid, Instruction, Num)).
 -else.
 -define(print_instruction(Instruction), void).
 -endif.

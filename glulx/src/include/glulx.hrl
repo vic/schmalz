@@ -56,6 +56,7 @@
 -define(SUB,          16#11).
 -define(STKCOPY,      16#54).
 -define(STREAMCHAR,   16#70).
+-define(STREAMSTR,    16#72).
 
 -record(instr, {opcode, operands, address, opnum_len, length}).
 
