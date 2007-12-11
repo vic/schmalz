@@ -23,14 +23,14 @@
 %%%-----------------------------------------------------------------------
 
 -module(glulx_vm).
--export([create/2, rpc/2, set_local_list/3,
+-export([create/1, rpc/2, glk_state/1, set_glk_state/2,
 	 set_word32/3]).
 -include("include/glulx.hrl").
 -include("include/glk.hrl").
 
 -record(call_frame, {type, result_spec, return_address, invocation_sp,
 		     locals}).
--record(glulx_vm, {memory, call_stack, value_stack, pc, status, glk_pid}).
+-record(glulx_vm, {memory, call_stack, value_stack, pc, status, glk_state}).
 
 % Function types
 -define(ARGS_STACK,  192).
@@ -44,21 +44,28 @@
 
 %% Creates an initialized Glulx-VM.
 %% @spec create(GlulxMem()) -> pid().
-create(Memory, GlkPid) ->
+create(Memory) ->
     #glulx_header{start_func = StartFuncAddr} = glulx_mem:header(Memory),
     StartFuncFrame = decode_function(Memory, StartFuncAddr, 0, undef,
 				     {const, ?DO_NOT_STORE}),
     Vm = #glulx_vm{memory = Memory, value_stack = [],
 		   call_stack = [StartFuncFrame],
 		   pc = StartFuncAddr + function_offset(StartFuncFrame),
-		   status = run, glk_pid = GlkPid},
+		   status = run, glk_state = glk:init()},
     spawn(fun() -> listen(Vm) end).
+
+%% Returns the glk state
+glk_state(MachineState) -> MachineState#glulx_vm.glk_state.
+
+%% Sets the Glk state
+set_glk_state(MachineState0, GlkState) ->
+    MachineState0#glulx_vm{glk_state = GlkState}.
 
 rpc(MachinePid, Message) ->
     MachinePid ! {self(), Message},
     receive
 	{MachinePid, Response} -> Response
-    after 5000 ->
+    after 500 ->
         io:format("waiting for ack timed out"),
 	halt
     end.
@@ -164,7 +171,7 @@ listen(#glulx_vm{memory = Memory, value_stack = ValueStack, pc = PC,
 	    listen(MachineState1);
 	{From, {streamchar, Latin1Char}} ->
 	    {_GlkResult, MachineState1} =
-		call_glk(MachineState0, ?GLK_PUT_CHAR, [Latin1Char]),
+		glk:glk_put_char(glulx_vm, MachineState0, [Latin1Char]),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, {streamnum, Number}} ->
@@ -501,51 +508,35 @@ set_iosys(MachineState0, Mode, Rock) ->
 
 glk(MachineState0, Identifier, NumArgs) ->
     {GlkArgs, MachineState1} = pop_stack_values(MachineState0, NumArgs),
-    call_glk(MachineState1, Identifier, GlkArgs).
-
-call_glk(#glulx_vm{glk_pid = GlkPid} = MachineState0, Identifier, GlkArgs) ->
-    {glk_result, ReturnValue, VmCallbacks} =
-	?call_glk({call, Identifier, GlkArgs}),
-    %io:format ("RESULT FROM GLK: (~w, ~p)~n", [ReturnValue, VmCallbacks]),
-    {ReturnValue, glk_vm_callbacks(MachineState0, VmCallbacks)}.
-
-call_glk_direct(#glulx_vm{glk_pid = GlkPid} = MachineState0, Function,
-		GlkArgs) ->
-    {glk_result, ReturnValue, VmCallbacks} = ?call_glk({Function, GlkArgs}),
-    {ReturnValue, glk_vm_callbacks(MachineState0, VmCallbacks)}.
-
-glk_vm_callbacks(MachineState0, []) -> MachineState0;
-glk_vm_callbacks(MachineState0, [{Callback, Params} | VmActions]) ->
-    MachineState1 = apply(glulx_vm, Callback, [MachineState0 | Params]),
-    glk_vm_callbacks(MachineState1, VmActions).
+    glk:dispatch(glulx_vm, MachineState1, Identifier, GlkArgs).
 
 %% Sends the string representation of the specified integer to the
 %% active Glk string 
 streamnum(MachineState0, Number) ->
-    glk_put_string(MachineState0, integer_to_list(Number)).
+    glk:glk_put_string(glulx_vm, MachineState0, integer_to_list(Number)).
 
 %% Sends the string at the specified Address to the active Glk stream
 streamstr(#glulx_vm{memory = Memory} = MachineState0, StrAddress) ->
     TypeByte = glulx_mem:get_byte(Memory, StrAddress),
     case TypeByte of
 	16#e0    ->
-	    io:fwrite("UNCOMPRESSED LATIN1-STRING~n");
+	    io:fwrite("UNCOMPRESSED LATIN1-STRING~n"),
+	    MachineState1 = MachineState0;
 	16#e1    ->
 	    %io:fwrite("COMPRESSED STRING~n"),
-	    glk_put_string(MachineState0,
-			   decompress(Memory, StrAddress + 1));
+	    {_, MachineState1} = glk:glk_put_string(
+				   glulx_vm, MachineState0,
+				   [decompress(Memory, StrAddress + 1)]);
 	16#e2    ->
-	    io:fwrite("UNCOMPRESSED UNICODE STRING~n");
+	    io:fwrite("UNCOMPRESSED UNICODE STRING~n"),
+	    MachineState1 = MachineState0;
 	_Default ->    
-	    io:format("UNKNOWN STRING TYPE: ~4.16.0B~n", [TypeByte])
+	    io:format("UNKNOWN STRING TYPE: ~4.16.0B~n", [TypeByte]),
+	    MachineState1 = MachineState0
     end,
-    MachineState0.
+    MachineState1.
 
 %% Sends a whole string to the current Glk stream, optimization to avoid
-%% sending each character separately
-glk_put_string(MachineState0, String) ->
-    call_glk_direct(MachineState0, glk_put_string, [String]).
-
 % Setup Huffman decoding
 decompress(Memory, Address) ->
     Header = glulx_mem:header(Memory),

@@ -30,12 +30,6 @@
 -define(GLK_PUT_CHAR,            16#80).
 -define(GLK_SET_STYLE,           16#86).
 
-% Macros
--define(GLK_RESULT(RetVal), {glk_result, RetVal, []}).
--define(GLK_RESULT_CB(RetVal, VmCallbacks), {glk_result, RetVal, VmCallbacks}).
--define(GLK_RESULT_VOID, {glk_result, 0, []}).
--define(call_glk(Message), glk:rpc(GlkPid, Message)).
-
 % Window constants
 -define(WINTYPE_ALL,            0).
 -define(WINTYPE_PAIR,           1).

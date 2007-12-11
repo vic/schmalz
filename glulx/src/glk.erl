@@ -16,14 +16,11 @@
 %%%-----------------------------------------------------------------------
 %%% Description of module glk
 %%%-----------------------------------------------------------------------
-%%% This module represents the GLK system. Since it is a system which
-%%% is more complex than the Glulx VM, it is modelled as an autonomous
-%%% Erlang process, effectively encapsulating its state.
-%%% In order to set values in the VM's memory, every API call returns
-%%% a list of virtual callbacks that might be performed before processing
-%%% the result. The virtual callback solution avoids that there is a
-%%% circular dependency between the VM and GLK, which would be difficult
-%%% to implement in Erlang.
+%%% This module represents the Glk system. Despite its complexity, it
+%%% was decided to implement the Glk module as an extension to the
+%%% virtual machine, since Glk needs to access the VM's memory, which
+%%% creates a cyclic communication dependency which is difficult to
+%%% solve if both are implemented as processes.
 %%%-----------------------------------------------------------------------
 %%% Exports
 %%%-----------------------------------------------------------------------
@@ -31,65 +28,46 @@
 %%%-----------------------------------------------------------------------
 
 -module(glk).
--export([init/0, rpc/2]).
+-export([init/0, dispatch/4, windows/2,
+	 glk_put_char/3, glk_put_string/3]).
 -include("include/glk.hrl").
--record(glk_state, {windows, streams, filerefs, memory_streams,
+-record(glk_state, {vm_module, windows, streams, filerefs, memory_streams,
 		    active_stream}).
 
 init() ->
-    GlkState = #glk_state{windows = init_windows(), streams = init_streams(),
-			  filerefs = [],
-			  memory_streams = init_memory_streams(),
-			  active_stream = null},
-    spawn(fun() -> listen(GlkState) end).
+    #glk_state{windows = init_windows(), streams = init_streams(),
+	       filerefs = [],
+	       memory_streams = init_memory_streams(),
+	       active_stream = null}.
 
-windows(#glk_state{windows = Windows}) -> Windows.
+windows(VmMod, VmState) ->
+    #glk_state{windows = Windows} = VmMod:glk_state(VmState),
+    Windows.
     
-rpc(GlkPid, Message) ->
-    GlkPid ! {self(), Message},
-    receive
-	{GlkPid, Response} -> Response
-    after 5000 ->
-        io:format("waiting for ack timed out"),
-	halt
+dispatch(VmMod, VmState0, Selector, GlkArgs) ->
+    io:format("GLK-$~8.16.0B: ~p ~p~n",
+	      [Selector, func_name(Selector), GlkArgs]),
+    Operation = get_op(Selector),
+    case Operation of
+	undef    ->
+	    io:format("NOT implemented, WIN: ~p~n",
+		      [windows(VmMod, VmState0)]);
+	_Default ->
+	    {Result, VmState1} = Operation(VmMod, VmState0, GlkArgs),
+	    io:format("WINDOWS: ~p~n", [windows(VmMod, VmState1)]),
+	    {Result, VmState1}
     end.
-
-listen(GlkState0) ->
-    receive
-	{From, {call, Selector, GlkArgs}} ->
-	    io:format("GLK-$~8.16.0B: ~p ~p~n",
-		      [Selector, func_name(Selector), GlkArgs]),
-	    Operation = get_op(Selector),
-	    {GlkResult, GlkState1} = Operation(GlkState0, GlkArgs),
-	    %io:format("GLK API RESULT ~p~n", [GlkResult]),
-	    ack(From, GlkResult),
-	    %io:format("GLK STATE ~p~n", [GlkState1]),
-	    listen(GlkState1);
-	{From, {glk_put_string, String}} ->
-	    {GlkResult, GlkState1} = glk_put_string(GlkState0, String),
-	    ack(From, GlkResult),
-	    %io:format("GLK STATE ~p~n", [GlkState1]),
-	    listen(GlkState1);
-	{From, windows} ->
-	    ack(From, windows(GlkState0)),
-	    listen(GlkState0);
-	{From, Other} ->
-	    ack(From, {error, Other}),
-	    listen(GlkState0)
-    end.
-
-ack(Pid, Message) -> Pid ! {self(), Message}.
 
 get_op(Selector) ->
     case Selector of
-	?GLK_WINDOW_ITERATE      -> fun glk_window_iterate/2;
-	?GLK_WINDOW_OPEN         -> fun glk_window_open/2;
-	?GLK_SET_WINDOW          -> fun glk_set_window/2;
-	?GLK_STREAM_ITERATE      -> fun glk_stream_iterate/2;
-	?GLK_STREAM_GET_CURRENT  -> fun glk_stream_get_current/2;
-	?GLK_FILEREF_ITERATE     -> fun glk_fileref_iterate/2;
-	?GLK_PUT_CHAR            -> fun glk_put_char/2;
-	?GLK_SET_STYLE           -> fun glk_set_style/2;
+	?GLK_WINDOW_ITERATE      -> fun glk_window_iterate/3;
+	?GLK_WINDOW_OPEN         -> fun glk_window_open/3;
+	?GLK_SET_WINDOW          -> fun glk_set_window/3;
+	?GLK_STREAM_ITERATE      -> fun glk_stream_iterate/3;
+	?GLK_STREAM_GET_CURRENT  -> fun glk_stream_get_current/3;
+	?GLK_FILEREF_ITERATE     -> fun glk_fileref_iterate/3;
+	?GLK_PUT_CHAR            -> fun glk_put_char/3;
+	?GLK_SET_STYLE           -> fun glk_set_style/3;
 	_Default -> undef
     end.
 
@@ -104,20 +82,21 @@ get_op(Selector) ->
 init_streams() -> {1, []}.
 
 %% Iterates through the currently available streams (TODO)
-glk_stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
+glk_stream_iterate(VmMod, VmState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
     Stream = 0,
-    if
-	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
-	true        -> VmCallbacks = []
-    end,
-    {?GLK_RESULT_CB(Stream, VmCallbacks), GlkState0}.
+    VmState1 =
+	if
+	    RockPtr > 0 -> VmMod:set_word32(VmState0, RockPtr, Rock);
+	    true        -> VmState0
+	end,
+    {Stream, VmState1}.
 
-glk_stream_get_current(#glk_state{active_stream = ActiveStream} = GlkState0,
-		       _) ->
+glk_stream_get_current(VmMod, VmState0, _) ->
+    #glk_state{active_stream = ActiveStream} = VmMod:glk_state(VmState0),
     case ActiveStream of
-	null     -> {?GLK_RESULT(0), GlkState0};
-	_Default -> {?GLK_RESULT(ActiveStream), GlkState0}
+	null     -> {0, VmState0};
+	_Default -> {ActiveStream, VmState0}
     end.
 
 %% Adds a new stream to the stream list
@@ -126,22 +105,26 @@ add_stream(#glk_state{streams = {NextId, Streams}} = GlkState0, Type, Ref) ->
     GlkState0#glk_state{streams = {NextId + 1, Streams ++ [Stream]}}.
 
 %% Writes a Latin1 character to the currently active stream
-glk_put_char(#glk_state{active_stream = ActiveStreamId,
-			streams = {_, Streams}} = GlkState0, [Char]) ->
+glk_put_char(VmMod, VmState0, [Char]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    #glk_state{active_stream = ActiveStreamId, streams = {_, Streams}}
+	= GlkState0,
     CurrentStream = get_stream(Streams, ActiveStreamId),
     GlkState1 = stream_put_char(GlkState0, CurrentStream, Char),
-    {?GLK_RESULT_VOID, GlkState1}.
+    {void, VmMod:set_glk_state(VmState0, GlkState1)}.
 
 stream_put_char(GlkState0, #glk_stream{type = window, ref = WindowId}, Char) ->
     window_put_char(GlkState0, WindowId, Char).
 
 %% Writes a string to the currently active stream, this is an optimization
 %% function
-glk_put_string(#glk_state{active_stream = ActiveStreamId,
-			  streams = {_, Streams}} = GlkState0, [String]) ->
+glk_put_string(VmMod, VmState0, [String]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    #glk_state{active_stream = ActiveStreamId, streams = {_, Streams}}
+	= GlkState0,
     CurrentStream = get_stream(Streams, ActiveStreamId),
     GlkState1 = stream_put_string(GlkState0, CurrentStream, String),
-    {?GLK_RESULT_VOID, GlkState1}.
+    {void, VmMod:set_glk_state(VmState0, GlkState1)}.
 
 stream_put_string(GlkState0, #glk_stream{type = window, ref = WindowId},
 		  String) ->
@@ -153,11 +136,13 @@ get_stream(Streams, ActiveStreamId) ->
 			    end, Streams)).
 
 %% Sets the output style for the current active stream
-glk_set_style(#glk_state{active_stream = ActiveStreamId,
-			 streams = {_, Streams}} = GlkState0, [Style]) ->
+glk_set_style(VmMod, VmState0, [Style]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    #glk_state{active_stream = ActiveStreamId, streams = {_, Streams}}
+	= GlkState0,
     CurrentStream = get_stream(Streams, ActiveStreamId),
     GlkState1 = stream_set_style(GlkState0, CurrentStream, Style),
-    {?GLK_RESULT_VOID, GlkState1}.
+    {void, VmMod:set_glk_state(VmState0, GlkState1)}.
 
 % Only window streams support styles
 stream_set_style(GlkState0, #glk_stream{type = window, ref = WindowId},
@@ -180,24 +165,30 @@ stream_set_style(GlkState0, _, _) -> GlkState0.
 
 init_windows() -> {1, undef}.
 
-glk_window_iterate(GlkState0, [_CurrWindow, RockPtr]) ->
+glk_window_iterate(VmMod, VmState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
     Window = 0,
-    if
-	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
-	true        -> VmCallbacks = []
-    end,
-    {?GLK_RESULT_CB(Window, VmCallbacks), GlkState0}.
+    VmState1 =
+	if
+	    RockPtr > 0 -> VmMod:set_word32(VmState0, RockPtr, Rock);
+	    true        -> VmState0
+	end,
+    {Window, VmState1}.
 
-glk_window_open(#glk_state{windows = {NextId, undef}} = GlkState0,
+%% Opens a new window through splitting a parent window
+glk_window_open(VmMod, VmState0, GlkArgs) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    {WindowId, GlkState1} = window_open(GlkState0, GlkArgs),
+    {WindowId, VmMod:set_glk_state(VmState0, GlkState1)}.
+
+window_open(#glk_state{windows = {NextId, undef}} = GlkState0,
 	    [0, _, _, Wintype, Rock]) ->
     io:format("OPENING INITIAL WINDOW, "
 	      "WinType: ~w, Rock: ~w~n", [Wintype, Rock]),
     Window = create_window(NextId, Wintype, Rock),
     GlkState1 = GlkState0#glk_state{windows = {NextId + 1, Window}},
-    {?GLK_RESULT(Window#glk_window.id),
-     add_stream(GlkState1, window, NextId)};
-glk_window_open(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
+    {Window#glk_window.id, add_stream(GlkState1, window, NextId)};
+window_open(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
 	    [Split, Method, Size, Wintype, Rock]) ->
     io:format("OPENING WINDOW (TODO), Split: ~w, Method: ~w, Size: ~w, "
 	      "WinType: ~w, Rock: ~w~n", [Split, Method, Size, Wintype, Rock]),
@@ -205,8 +196,7 @@ glk_window_open(#glk_state{windows = {NextId, WindowTree}} = GlkState0,
     GlkState1 = GlkState0#glk_state{
 		  windows = {NextId + 2, split_window(WindowTree, Split, Method,
 						      Size, Window)}},
-    {?GLK_RESULT(Window#glk_window.id),
-     add_stream(GlkState1, window, NextId)}.
+    {Window#glk_window.id, add_stream(GlkState1, window, NextId)}.
 
 split_window(#glk_window{id = Split} = ParentWindow,
 	     Split, Method, Size, ChildWindow) ->
@@ -275,9 +265,12 @@ create_pair_window(ParentWindow, #glk_window{id = ChildId} = ChildWindow,
 		     child2 = Second, size2 = Size2}.
     
 %% Selects the specified window as the current output target
-glk_set_window(#glk_state{streams = {_, Streams}} = GlkState0, [WindowId]) ->
-    {?GLK_RESULT_VOID,
-     GlkState0#glk_state{active_stream = window_stream(Streams, WindowId)}}.
+glk_set_window(VmMod, VmState0, [WindowId]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    #glk_state{streams = {_, Streams}} = GlkState0,
+    GlkState1 = GlkState0#glk_state{active_stream =
+				    window_stream(Streams, WindowId)},
+    {void, VmMod:set_glk_state(VmState0, GlkState1)}.
 
 window_stream([], _) -> undef;
 window_stream([#glk_stream{id = Id, type = window, ref = WindowId} | _Streams],
@@ -338,19 +331,20 @@ window_put_string(#glk_pair_window{child1 = Child1, child2 = Child2}
 
 init_memory_streams() -> {1, undef}.
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% File Refs
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-glk_fileref_iterate(GlkState0, [_CurrFileref, RockPtr]) ->
+glk_fileref_iterate(VmMod, VmState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
     Fileref = 0,
-    if
-	RockPtr > 0 -> VmCallbacks = [{set_word32, [RockPtr, Rock]}];
-	true        -> VmCallbacks = []
-    end,
-    {?GLK_RESULT_CB(Fileref, VmCallbacks), GlkState0}.
+    VmState1 =
+	if
+	    RockPtr > 0 -> VmMod:set_word32(VmState0, RockPtr, Rock);
+	    true        -> VmState0
+	end,
+    {Fileref, VmState1}.
+
 
 %% Determine the public API function name
 func_name(Selector) ->

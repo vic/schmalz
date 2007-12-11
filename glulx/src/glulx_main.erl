@@ -51,19 +51,18 @@ main() ->
 
 % starts the Glulx-VM with the specified story file
 start(Filename) ->
-    GlkPid = glk:init(),
-    MachinePid = glulx_vm:create(glulx_mem:read_file(Filename), GlkPid),
-    run(GlkPid, MachinePid, 1).
+    MachinePid = glulx_vm:create(glulx_mem:read_file(Filename)),
+    run(MachinePid, 1).
 
-run(GlkPid, MachinePid, Num) ->
+run(MachinePid, Num) ->
     Status = ?call_machine(status),
     if
         Status =:= halt ->
-	    io:format("~nOUTPUT:~n------~n~p~n", [glk:rpc(GlkPid, windows)]),
+	    %io:format("~nOUTPUT:~n------~n~p~n", [glk:rpc(GlkPid, windows)]),
 	    halt;
         true ->
             Instruction = glulx_decode_instr:decode(MachinePid),
             ?print_instruction(Instruction),
             glulx_instr:execute(MachinePid, Instruction),
-	    run(GlkPid, MachinePid, Num + 1)
+	    run(MachinePid, Num + 1)
     end.
