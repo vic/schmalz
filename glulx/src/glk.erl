@@ -33,13 +33,18 @@
 -module(glk).
 -export([init/0, rpc/2]).
 -include("include/glk.hrl").
--record(glk_state, {windows, streams, filerefs, active_stream}).
+-record(glk_state, {windows, streams, filerefs, memory_streams,
+		    active_stream}).
 
 init() ->
     GlkState = #glk_state{windows = init_windows(), streams = init_streams(),
-			  filerefs = [], active_stream = null},
+			  filerefs = [],
+			  memory_streams = init_memory_streams(),
+			  active_stream = null},
     spawn(fun() -> listen(GlkState) end).
 
+windows(#glk_state{windows = Windows}) -> Windows.
+    
 rpc(GlkPid, Message) ->
     GlkPid ! {self(), Message},
     receive
@@ -65,6 +70,9 @@ listen(GlkState0) ->
 	    ack(From, GlkResult),
 	    %io:format("GLK STATE ~p~n", [GlkState1]),
 	    listen(GlkState1);
+	{From, windows} ->
+	    ack(From, windows(GlkState0)),
+	    listen(GlkState0);
 	{From, Other} ->
 	    ack(From, {error, Other}),
 	    listen(GlkState0)
@@ -74,13 +82,14 @@ ack(Pid, Message) -> Pid ! {self(), Message}.
 
 get_op(Selector) ->
     case Selector of
-	?GLK_WINDOW_ITERATE  -> fun glk_window_iterate/2;
-	?GLK_WINDOW_OPEN     -> fun glk_window_open/2;
-	?GLK_SET_WINDOW      -> fun glk_set_window/2;
-	?GLK_STREAM_ITERATE  -> fun glk_stream_iterate/2;
-	?GLK_FILEREF_ITERATE -> fun glk_fileref_iterate/2;
-	?GLK_PUT_CHAR        -> fun glk_put_char/2;
-	?GLK_SET_STYLE       -> fun glk_set_style/2;
+	?GLK_WINDOW_ITERATE      -> fun glk_window_iterate/2;
+	?GLK_WINDOW_OPEN         -> fun glk_window_open/2;
+	?GLK_SET_WINDOW          -> fun glk_set_window/2;
+	?GLK_STREAM_ITERATE      -> fun glk_stream_iterate/2;
+	?GLK_STREAM_GET_CURRENT  -> fun glk_stream_get_current/2;
+	?GLK_FILEREF_ITERATE     -> fun glk_fileref_iterate/2;
+	?GLK_PUT_CHAR            -> fun glk_put_char/2;
+	?GLK_SET_STYLE           -> fun glk_set_style/2;
 	_Default -> undef
     end.
 
@@ -103,6 +112,13 @@ glk_stream_iterate(GlkState0, [_CurrStream, RockPtr]) ->
 	true        -> VmCallbacks = []
     end,
     {?GLK_RESULT_CB(Stream, VmCallbacks), GlkState0}.
+
+glk_stream_get_current(#glk_state{active_stream = ActiveStream} = GlkState0,
+		       _) ->
+    case ActiveStream of
+	null     -> {?GLK_RESULT(0), GlkState0};
+	_Default -> {?GLK_RESULT(ActiveStream), GlkState0}
+    end.
 
 %% Adds a new stream to the stream list
 add_stream(#glk_state{streams = {NextId, Streams}} = GlkState0, Type, Ref) ->
@@ -317,6 +333,13 @@ window_put_string(#glk_pair_window{child1 = Child1, child2 = Child2}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Memory Streams
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+init_memory_streams() -> {1, undef}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% File Refs
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -332,12 +355,14 @@ glk_fileref_iterate(GlkState0, [_CurrFileref, RockPtr]) ->
 %% Determine the public API function name
 func_name(Selector) ->
     case Selector of
-	?GLK_WINDOW_ITERATE  -> glk_window_iterate;
-	?GLK_WINDOW_OPEN     -> glk_window_open;
-	?GLK_SET_WINDOW      -> glk_set_window;
-	?GLK_STREAM_ITERATE  -> glk_stream_iterate;
-	?GLK_FILEREF_ITERATE -> glk_fileref_iterate;
-	?GLK_PUT_CHAR        -> glk_put_char;
-	?GLK_SET_STYLE       -> glk_set_style;
+	?GLK_WINDOW_ITERATE      -> glk_window_iterate;
+	?GLK_WINDOW_OPEN         -> glk_window_open;
+	?GLK_SET_WINDOW          -> glk_set_window;
+	?GLK_STREAM_ITERATE      -> glk_stream_iterate;
+	?GLK_STREAM_OPEN_MEMORY  -> glk_stream_open_memory;
+	?GLK_STREAM_GET_CURRENT  -> glk_stream_get_current;
+	?GLK_FILEREF_ITERATE     -> glk_fileref_iterate;
+	?GLK_PUT_CHAR            -> glk_put_char;
+	?GLK_SET_STYLE           -> glk_set_style;
 	_Default -> '(unknown glk selector)'
     end. 

@@ -58,7 +58,9 @@ start(Filename) ->
 run(GlkPid, MachinePid, Num) ->
     Status = ?call_machine(status),
     if
-        Status =:= halt -> halt;
+        Status =:= halt ->
+	    io:format("~nOUTPUT:~n------~n~p~n", [glk:rpc(GlkPid, windows)]),
+	    halt;
         true ->
             Instruction = glulx_decode_instr:decode(MachinePid),
             ?print_instruction(Instruction),

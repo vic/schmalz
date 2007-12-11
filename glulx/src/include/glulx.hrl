@@ -38,6 +38,7 @@
 -define(CALLFIII,     16#163).
 -define(COPY,         16#40).
 -define(COPYB,        16#42).
+-define(DIV,          16#13).
 -define(GESTALT,      16#100).
 -define(GETMEMSIZE,   16#102).
 -define(GLK,          16#130).
@@ -45,6 +46,7 @@
 -define(JGE,          16#27).
 -define(JGEU,         16#2b).
 -define(JGT,          16#28).
+-define(JLE,          16#29).
 -define(JLT,          16#26).
 -define(JNE,          16#25).
 -define(JNZ,          16#23).

@@ -20,13 +20,15 @@
 %%%-----------------------------------------------------------------------
 
 % GLK Selectors
--define(GLK_WINDOW_ITERATE,  16#20).
--define(GLK_WINDOW_OPEN,     16#23).
--define(GLK_SET_WINDOW,      16#2f).
--define(GLK_STREAM_ITERATE,  16#40).
--define(GLK_FILEREF_ITERATE, 16#64).
--define(GLK_PUT_CHAR,        16#80).
--define(GLK_SET_STYLE,       16#86).
+-define(GLK_WINDOW_ITERATE,      16#20).
+-define(GLK_WINDOW_OPEN,         16#23).
+-define(GLK_SET_WINDOW,          16#2f).
+-define(GLK_STREAM_ITERATE,      16#40).
+-define(GLK_STREAM_OPEN_MEMORY,  16#43).
+-define(GLK_STREAM_GET_CURRENT,  16#48).
+-define(GLK_FILEREF_ITERATE,     16#64).
+-define(GLK_PUT_CHAR,            16#80).
+-define(GLK_SET_STYLE,           16#86).
 
 % Macros
 -define(GLK_RESULT(RetVal), {glk_result, RetVal, []}).

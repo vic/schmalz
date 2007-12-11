@@ -62,6 +62,7 @@ get_operation(OpcodeNum) ->
 	?CALLFIII     -> fun callfiii/2;
 	?COPY         -> fun copy/2;
 	?COPYB        -> fun copyb/2;
+	?DIV          -> fun op_div/2;
 	?GESTALT      -> fun gestalt/2;
 	?GETMEMSIZE   -> fun getmemsize/2;
 	?GLK          -> fun glk/2;
@@ -69,6 +70,7 @@ get_operation(OpcodeNum) ->
 	?JGE          -> fun jge/2;
 	?JGEU         -> fun jgeu/2;
 	?JGT          -> fun jgt/2;
+	?JLE          -> fun jle/2;
 	?JLT          -> fun jlt/2;
 	?JNE          -> fun jne/2;
 	?JNZ          -> fun jnz/2;
@@ -91,6 +93,7 @@ keep_pc(?JEQ)      -> true;
 keep_pc(?JGE)      -> true;
 keep_pc(?JGEU)     -> true;
 keep_pc(?JGT)      -> true;
+keep_pc(?JLE)      -> true;
 keep_pc(?JLT)      -> true;
 keep_pc(?JNE)      -> true;
 keep_pc(?JNZ)      -> true;
@@ -212,6 +215,10 @@ copy(MachinePid, #instr{operands = Operands}) ->
 copyb(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_byte_value, ?BYTE_OPERAND_VALUE(1), ?OPERAND(2)}).
 
+op_div(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, ?OPERAND_VALUE(1) div ?OPERAND_VALUE(2),
+		   ?OPERAND(3)}).
+
 getmemsize(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?call_machine(memsize), ?OPERAND(1)}).
 
@@ -241,6 +248,15 @@ jgeu(MachinePid, #instr{operands = Operands} = Instruction) ->
 
 jgt(MachinePid, #instr{operands = Operands} = Instruction) ->
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) > ?SIGNED_OPERAND_VALUE(2),
+		      ?OPERAND_VALUE(3)).
+
+jle(MachinePid, #instr{operands = Operands} = Instruction) ->
+    io:format("@JLE ~w ~w ~p: ~p~n", [?SIGNED_OPERAND_VALUE(1),
+				  ?SIGNED_OPERAND_VALUE(2),
+				  ?OPERAND_VALUE(3),
+				  (?SIGNED_OPERAND_VALUE(1) =<
+				   ?SIGNED_OPERAND_VALUE(2))]),
+    ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) =< ?SIGNED_OPERAND_VALUE(2),
 		      ?OPERAND_VALUE(3)).
 
 jlt(MachinePid, #instr{operands = Operands} = Instruction) ->
@@ -289,6 +305,7 @@ streamstr(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({streamstr, ?OPERAND_VALUE(1)}).
 
 branch_or_advance(MachinePid, false, _Offset, Instruction) ->
+    %io:format("INC PC by: ~w~n", [Instruction#instr.length]),
     ?call_machine({inc_pc, Instruction#instr.length});
 branch_or_advance(MachinePid, true, 0, _Instruction) ->
     ?call_machine({return_from_call, 0});
@@ -366,6 +383,7 @@ op_name(OpcodeNum) ->
 	?CALLFIII     -> callfiii;
 	?COPY         -> copy;
 	?COPYB        -> copyb;
+	?DIV          -> op_div;
 	?GESTALT      -> gestalt;
 	?GETMEMSIZE   -> getmemsize;
 	?GLK          -> glk;
@@ -373,6 +391,7 @@ op_name(OpcodeNum) ->
 	?JGE          -> jge;
 	?JGEU         -> jgeu;
 	?JGT          -> jgt;
+	?JLE          -> jle;
 	?JLT          -> jlt;
 	?JNE          -> jne;
 	?JNZ          -> jnz;

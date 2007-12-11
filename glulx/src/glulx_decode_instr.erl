@@ -72,6 +72,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?CALLFI       -> 3;
 	?CALLFII      -> 4;
 	?CALLFIII     -> 5;
+	?DIV          -> 3;
 	?GESTALT      -> 3;
 	?GETMEMSIZE   -> 1;
 	?GLK          -> 3;
@@ -79,6 +80,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?JGE          -> 3;
 	?JGEU         -> 3;
 	?JGT          -> 3;
+	?JLE          -> 3;
 	?JLT          -> 3;
 	?JNE          -> 3;
 	?JNZ          -> 2;
