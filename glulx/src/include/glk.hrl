@@ -25,6 +25,7 @@
 -define(GLK_SET_WINDOW,          16#2f).
 -define(GLK_STREAM_ITERATE,      16#40).
 -define(GLK_STREAM_OPEN_MEMORY,  16#43).
+-define(GLK_STREAM_SET_CURRENT,  16#47).
 -define(GLK_STREAM_GET_CURRENT,  16#48).
 -define(GLK_FILEREF_ITERATE,     16#64).
 -define(GLK_PUT_CHAR,            16#80).
