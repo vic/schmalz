@@ -24,7 +24,7 @@
 
 -module(glulx_vm).
 -export([create/1, rpc/2, glk_state/1, set_glk_state/2,
-	 set_word32/3]).
+	 set_word32/3, halt_vm/2, push/2, pop/1]).
 -include("include/glulx.hrl").
 -include("include/glk.hrl").
 
@@ -69,6 +69,11 @@ rpc(MachinePid, Message) ->
         io:format("waiting for ack timed out"),
 	halt
     end.
+
+%% Halts the VM with an error message
+halt_vm(MachineState0, Message) ->
+    io:format("Virtual Machine HALT: ~s~n", [Message]),
+    MachineState0#glulx_vm{status = halt}.
 
 listen(#glulx_vm{memory = Memory, value_stack = ValueStack, pc = PC,
 		 status = Status} = MachineState0) ->
