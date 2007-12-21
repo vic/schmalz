@@ -128,85 +128,89 @@ update_pc(#instruction{operand_count = OperandCount, opcode_num = OpcodeNum,
 get_operation(#instruction{operand_count = oc_0op, opcode_num = OpcodeNum },
 	      _MachinePid) ->
     case OpcodeNum of
-	?NEW_LINE      -> fun new_line/2;
-	?NOP           -> fun nop/2;
-	?PIRACY        -> fun piracy/2;
-	?POP           -> fun pop/2;
-	?PRINT         -> fun print/2;
-	?PRINT_RET     -> fun print_ret/2;
-	?QUIT          -> fun op_halt/2;
-	?RET_POPPED    -> fun ret_popped/2;
-	?RTRUE         -> fun rtrue/2;
-	?RFALSE        -> fun rfalse/2;
-	?SHOW_STATUS   -> fun show_status/2;
-	?VERIFY        -> fun verify/2;
-	_Default       -> fun op_halt/2
+	?NEW_LINE         -> fun new_line/2;
+	?NOP              -> fun nop/2;
+	?PIRACY           -> fun piracy/2;
+	?POP              -> fun pop/2;
+	?PRINT            -> fun print/2;
+	?PRINT_RET        -> fun print_ret/2;
+	?QUIT             -> fun op_halt/2;
+	?RET_POPPED       -> fun ret_popped/2;
+	?RTRUE            -> fun rtrue/2;
+	?RFALSE           -> fun rfalse/2;
+	?SHOW_STATUS      -> fun show_status/2;
+	?VERIFY           -> fun verify/2;
+	_Default          -> fun op_halt/2
     end;
 get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum },
 	      _MachinePid) ->
     case OpcodeNum of
-	?DEC           -> fun dec/2;
-	?GET_CHILD     -> fun get_child/2;
-	?GET_PARENT    -> fun get_parent/2;
-	?GET_PROP_LEN  -> fun get_prop_len/2;
-	?GET_SIBLING   -> fun get_sibling/2;
-	?INC           -> fun inc/2;
-	?JUMP          -> fun jump/2;
-	?JZ            -> fun jz/2;
-	?LOAD          -> fun load/2;
-	?NOT           -> fun op_not/2;
-	?PRINT_ADDR    -> fun print_addr/2;
-	?PRINT_OBJ     -> fun print_obj/2;
-	?PRINT_PADDR   -> fun print_paddr/2;
-	?REMOVE_OBJ    -> fun remove_obj/2;
-	?RET           -> fun ret/2;
-	_Default       -> fun op_halt/2
+	?DEC              -> fun dec/2;
+	?GET_CHILD        -> fun get_child/2;
+	?GET_PARENT       -> fun get_parent/2;
+	?GET_PROP_LEN     -> fun get_prop_len/2;
+	?GET_SIBLING      -> fun get_sibling/2;
+	?INC              -> fun inc/2;
+	?JUMP             -> fun jump/2;
+	?JZ               -> fun jz/2;
+	?LOAD             -> fun load/2;
+	?NOT              -> fun op_not/2;
+	?PRINT_ADDR       -> fun print_addr/2;
+	?PRINT_OBJ        -> fun print_obj/2;
+	?PRINT_PADDR      -> fun print_paddr/2;
+	?REMOVE_OBJ       -> fun remove_obj/2;
+	?RET              -> fun ret/2;
+	_Default          -> fun op_halt/2
     end;
 get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum },
 	      _MachinePid) ->
     case OpcodeNum of
-	?ADD           -> fun add/2;
-	?AND           -> fun op_and/2;
-	?CALL_2S       -> fun call_2s/2;
-	?CLEAR_ATTR    -> fun clear_attr/2;
-	?DEC_CHK       -> fun dec_chk/2;
-	?DIV           -> fun op_div/2;
-	?GET_NEXT_PROP -> fun get_next_prop/2;
-	?GET_PROP      -> fun get_prop/2;
-	?GET_PROP_ADDR -> fun get_prop_addr/2;
-	?INC_CHK       -> fun inc_chk/2;
-	?INSERT_OBJ    -> fun insert_obj/2;
-	?JE            -> fun je/2;
-	?JG            -> fun jg/2;
-	?JIN           -> fun jin/2;
-	?JL            -> fun jl/2;
-	?LOADB         -> fun loadb/2;
-	?LOADW         -> fun loadw/2;
-	?MOD           -> fun mod/2;
-	?MUL           -> fun mul/2;
-	?OR            -> fun op_or/2;
-	?SET_ATTR      -> fun set_attr/2;
-	?SUB           -> fun sub/2;
-	?STORE         -> fun store/2;
-	?TEST          -> fun test/2;
-	?TEST_ATTR     -> fun test_attr/2;
-	_Default       -> fun op_halt/2
+	?ADD              -> fun add/2;
+	?AND              -> fun op_and/2;
+	?CALL_2S          -> fun call_2s/2;
+	?CLEAR_ATTR       -> fun clear_attr/2;
+	?DEC_CHK          -> fun dec_chk/2;
+	?DIV              -> fun op_div/2;
+	?GET_NEXT_PROP    -> fun get_next_prop/2;
+	?GET_PROP         -> fun get_prop/2;
+	?GET_PROP_ADDR    -> fun get_prop_addr/2;
+	?INC_CHK          -> fun inc_chk/2;
+	?INSERT_OBJ       -> fun insert_obj/2;
+	?JE               -> fun je/2;
+	?JG               -> fun jg/2;
+	?JIN              -> fun jin/2;
+	?JL               -> fun jl/2;
+	?LOADB            -> fun loadb/2;
+	?LOADW            -> fun loadw/2;
+	?MOD              -> fun mod/2;
+	?MUL              -> fun mul/2;
+	?OR               -> fun op_or/2;
+	?SET_ATTR         -> fun set_attr/2;
+	?SUB              -> fun sub/2;
+	?STORE            -> fun store/2;
+	?TEST             -> fun test/2;
+	?TEST_ATTR        -> fun test_attr/2;
+	_Default          -> fun op_halt/2
     end;
 get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	      _MachinePid) ->
     case OpcodeNum of
-	?CALL          -> fun call/2;
-	?PRINT_NUM     -> fun print_num/2;
-	?PRINT_CHAR    -> fun print_char/2;
-	?PUSH          -> fun push/2;
-	?PULL          -> fun pull/2;
-	?PUT_PROP      -> fun put_prop/2;
-	?RANDOM        -> fun random/2;
-	?SOUND_EFFECT  -> fun sound_effect/2;
-	?SREAD         -> fun sread/2;
-	?STOREB        -> fun storeb/2;
-	?STOREW        -> fun storew/2;
-	_Default       -> fun op_halt/2
+	?BUFFER_MODE      -> fun buffer_mode/2;
+	?CALL             -> fun call/2;
+	?ERASE_WINDOW     -> fun erase_window/2;
+	?PRINT_NUM        -> fun print_num/2;
+	?PRINT_CHAR       -> fun print_char/2;
+	?PUSH             -> fun push/2;
+	?PULL             -> fun pull/2;
+	?PUT_PROP         -> fun put_prop/2;
+	?RANDOM           -> fun random/2;
+	?SET_WINDOW       -> fun set_window/2;
+	?SOUND_EFFECT     -> fun sound_effect/2;
+	?SPLIT_WINDOW     -> fun split_window/2;
+	?SREAD            -> fun sread/2;
+	?STOREB           -> fun storeb/2;
+	?STOREW           -> fun storew/2;
+	_Default          -> fun op_halt/2
     end.
 
 %%%-----------------------------------------------------------------------
@@ -222,6 +226,8 @@ op_and(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?param(1) band ?param(2)).
+
+buffer_mode(_, _) -> void. % not implemented
 
 call(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [ PackedAddress | Arguments] = params(MachinePid, Operands),
@@ -267,6 +273,10 @@ op_div(#instruction{operands = Operands, store_variable = StoreVar},
        MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
     ?store_var(?trunc16(?param(1) div ?param(2))).
+
+erase_window(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_SIGNED_PARAMETERS,
+    ?call_machine({erase_window, ?param(1)}).
 
 get_child(#instruction{operands = Operands, store_variable = StoreVar}
 	  = Instruction, MachinePid) ->
@@ -475,10 +485,18 @@ set_attr(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_attribute, ?param(1), ?param(2)}).
 
+set_window(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    ?call_machine({set_window, ?param(1)}).
+
 show_status(_Instruction, MachinePid) ->
     ?call_machine(update_status_line).
 
 sound_effect(_Instruction, _MachinePid) -> void. % not implemented
+
+split_window(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    ?call_machine({split_window, ?param(1)}).
 
 sread(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
@@ -640,66 +658,71 @@ oc_0op_op_name(OpcodeNum) ->
 
 oc_1op_op_name(OpcodeNum) ->
     case OpcodeNum of
-	?DEC           -> dec;
-	?GET_CHILD     -> get_child;
-	?GET_PARENT    -> get_parent;
-	?GET_PROP_LEN  -> get_prop_len;
-	?GET_SIBLING   -> get_sibling;
-	?INC           -> inc;
-	?JUMP          -> jump;
-	?JZ            -> jz;
-	?LOAD          -> load;
-	?NOT           -> 'not';
-	?PRINT_ADDR    -> print_addr;
-	?PRINT_OBJ     -> print_obj;
-	?PRINT_PADDR   -> print_paddr;
-	?REMOVE_OBJ    -> remove_obj;
-	?RET           -> ret;
-	_Default       -> '??? (1OP)'
+	?DEC            -> dec;
+	?GET_CHILD      -> get_child;
+	?GET_PARENT     -> get_parent;
+	?GET_PROP_LEN   -> get_prop_len;
+	?GET_SIBLING    -> get_sibling;
+	?INC            -> inc;
+	?JUMP           -> jump;
+	?JZ             -> jz;
+	?LOAD           -> load;
+	?NOT            -> 'not';
+	?PRINT_ADDR     -> print_addr;
+	?PRINT_OBJ      -> print_obj;
+	?PRINT_PADDR    -> print_paddr;
+	?REMOVE_OBJ     -> remove_obj;
+	?RET            -> ret;
+	_Default        -> '??? (1OP)'
     end.
 
 oc_2op_op_name(OpcodeNum) ->
     case OpcodeNum of
-	?ADD           -> add;
-	?AND           -> 'and';
-	?CALL_2S       -> call_2s;
-	?CLEAR_ATTR    -> clear_attr;
-	?DEC_CHK       -> dec_chk;
-	?DIV           -> 'div';
-	?GET_NEXT_PROP -> get_next_prop;
-	?GET_PROP      -> get_prop;
-	?GET_PROP_ADDR -> get_prop_addr;
-	?INC_CHK       -> inc_chk;
-	?INSERT_OBJ    -> insert_obj;
-	?JE            -> je;
-	?JIN           -> jin;
-	?JG            -> jg;
-	?JL            -> jl;
-	?LOADB         -> loadb;
-	?LOADW         -> loadw;
-	?MOD           -> mod;
-	?MUL           -> mul;
-	?OR            -> 'or';
-	?SET_ATTR      -> set_attr;
-	?SUB           -> sub;
-	?STORE         -> store;
-	?TEST          -> test;
-	?TEST_ATTR     -> test_attr;
-	_Default -> '??? (2OP)'
+	?ADD            -> add;
+	?AND            -> 'and';
+	?CALL_2S        -> call_2s;
+	?CLEAR_ATTR     -> clear_attr;
+	?DEC_CHK        -> dec_chk;
+	?DIV            -> 'div';
+	?GET_NEXT_PROP  -> get_next_prop;
+	?GET_PROP       -> get_prop;
+	?GET_PROP_ADDR  -> get_prop_addr;
+	?INC_CHK        -> inc_chk;
+	?INSERT_OBJ     -> insert_obj;
+	?JE             -> je;
+	?JIN            -> jin;
+	?JG             -> jg;
+	?JL             -> jl;
+	?LOADB          -> loadb;
+	?LOADW          -> loadw;
+	?MOD            -> mod;
+	?MUL            -> mul;
+	?OR             -> 'or';
+	?SET_ATTR       -> set_attr;
+	?SUB            -> sub;
+	?STORE          -> store;
+	?TEST           -> test;
+	?TEST_ATTR      -> test_attr;
+	_Default        -> '??? (2OP)'
     end.
 
 oc_var_op_name(OpcodeNum) ->
     case OpcodeNum of
-	?CALL          -> call;
-	?PRINT_CHAR    -> print_char;
-	?PRINT_NUM     -> print_num;
-	?PUSH          -> push;
-	?PULL          -> pull;
-	?PUT_PROP      -> put_prop;
-	?RANDOM        -> random;
-	?SOUND_EFFECT  -> sound_effect;
-	?SREAD         -> sread;
-	?STOREB        -> storeb;
-	?STOREW        -> storew;
-	_Default       -> '??? (VAR)'
+	?BUFFER_MODE    -> buffer_mode;
+	?CALL           -> call;
+	?ERASE_WINDOW   -> erase_window;
+	?PRINT_CHAR     -> print_char;
+	?PRINT_NUM      -> print_num;
+	?PUSH           -> push;
+	?PULL           -> pull;
+	?PUT_PROP       -> put_prop;
+	?RANDOM         -> random;
+	?SET_TEXT_STYLE -> set_text_style;
+	?SET_WINDOW     -> set_window;
+	?SOUND_EFFECT   -> sound_effect;
+	?SPLIT_WINDOW   -> split_window;
+	?SREAD          -> sread;
+	?STOREB         -> storeb;
+	?STOREW         -> storew;
+	_Default        -> '??? (VAR)'
     end.

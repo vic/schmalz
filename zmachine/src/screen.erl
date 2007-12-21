@@ -30,7 +30,7 @@
 
 -module(screen).
 -export([create/1, status_line/1, set_status_line/4, bottom_window/1,
-	 print_zscii/2, split_window/2]).
+	 print_zscii/2, split_window/2, erase_window/2, set_window/2]).
 
 -record(screen, {status_line, window_top, window_bottom, current}).
 
@@ -51,8 +51,8 @@ bottom_window(#screen{window_bottom = WindowBottom} = Screen) ->
 print_zscii(#screen{window_bottom = Window} = Screen, ZsciiString) ->
     Screen#screen{window_bottom = Window ++ ZsciiString}.
 
-split_window(#screen{window_top = {_NumLines, NumColumns, Rows}}
-		    = Screen, NewNumRows) ->
+split_window(#screen{window_top = {_, NumColumns, Rows}} = Screen,
+	     NewNumRows) ->
     Diff = NewNumRows - length(Rows),
     NewRows =
 	if
@@ -61,5 +61,11 @@ split_window(#screen{window_top = {_NumLines, NumColumns, Rows}}
     end,
     Screen#screen{window_top = {NewNumRows, NumColumns, NewRows}}.
 
+erase_window(#screen{window_top = {_, NumColumns, _}} = Screen, -1) ->
+    create(NumColumns).
+
+set_window(Screen, 0) -> Screen#screen{current = bottom};
+set_window(Screen, 1) -> Screen#screen{current = top}.
+     
 generate_empty_rows(NumRows, NumColumns) ->
     lists:duplicate(NumRows, lists:duplicate(NumColumns, {[], " "})).

@@ -30,8 +30,7 @@
 %%%   creates a new MachineState object
 %%%-----------------------------------------------------------------------
 -module(machine).
--export([create/1, rpc/2,
-	 print/1, print_locals/1, dump_input_buffer/1]).
+-export([create/1, rpc/2, print/1, print_locals/1, dump_input_buffer/1]).
 -record(machine_state, {memory, value_stack, call_stack, pc, streams, status}).
 -record(routine, {start_address, return_address, invocation_sp, local_vars,
 		  return_variable}).
@@ -145,6 +144,7 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	        MachineState0, decode_packed_address(Memory, PackedAddress)),
 	    ack(From, ok),
 	    listen(MachineState1);
+	% Objects
 	{From, {print_object, ObjectNum}} ->
 	    MachineState1 = print_zscii(
 	        MachineState0, objects:name(Memory, ObjectNum)),
@@ -197,6 +197,7 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	{From, {object_next_property, Object, Property}} ->
 	    ack(From, objects:next_property_num(Memory, Object, Property)),
 	    listen(MachineState0);
+	% I/O
 	{From, {send_input, InputString0}} ->
 	    InputString1 = string:to_lower(string:strip(InputString0)),
 	    MachineState1 = append_input(MachineState0, InputString1),
@@ -204,6 +205,19 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    listen(MachineState1);
 	{From, {sread, TextBuffer, ParseBuffer}} ->
 	    MachineState1 = sread(MachineState0, TextBuffer, ParseBuffer),
+	    ack(From, ok),
+	    listen(MachineState1);
+	% Window operations
+	{From, {erase_window, WindowNum}} ->
+	    MachineState1 = erase_window(MachineState0, WindowNum),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {split_window, Lines}} ->
+	    MachineState1 = split_window(MachineState0, Lines),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {set_window, WindowNum}} ->
+	    MachineState1 = set_window(MachineState0, WindowNum),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From,Other} ->
@@ -454,6 +468,15 @@ read_input(#machine_state{streams = Streams0} = MachineState) ->
 
 dump_input_buffer(#machine_state{streams = Streams}) ->
     streams:dump_input(Streams).
+
+erase_window(#machine_state{streams = Streams} = VmState0, WindowNum) ->
+    VmState0#machine_state{streams = streams:erase_window(Streams, WindowNum)}.
+
+split_window(#machine_state{streams = Streams} = VmState0, Lines) ->
+    VmState0#machine_state{streams = streams:split_window(Streams, Lines)}.
+
+set_window(#machine_state{streams = Streams} = VmState0, WindowNum) ->
+    VmState0#machine_state{streams = streams:set_window(Streams, WindowNum)}.
 
 %%%-----------------------------------------------------------------------
 %%% State printing

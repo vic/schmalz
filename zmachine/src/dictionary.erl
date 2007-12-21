@@ -76,7 +76,7 @@ lookup(Memory, Token) ->
     lookup(Memory, Token, 0, NumEntries - 1, MaxWordLength).
 
 lookup(_Memory, {Pos, String}, Left, Right, _MaxWordLength)
-  when Left > Right; Right < Left -> {Pos, ?NOT_FOUND, String};
+  when Left > Right -> {Pos, ?NOT_FOUND, String};
 lookup(Memory, {Pos, String} = Token, Left, Right, MaxWordLength) ->
     Index = (Left + Right) div 2,
     WordAddress = word_address(Memory, Index),
@@ -85,9 +85,9 @@ lookup(Memory, {Pos, String} = Token, Left, Right, MaxWordLength) ->
     %io:format("index: ~p, String: ~p, DictEntry: ~p~n",
 	%      [Index, String, DictEntry]),
     case strcmp(substr(String, 1, MaxWordLength), DictEntry) of
-	1 -> lookup(Memory, Token, Index + 1, Right, MaxWordLength);
+	1   -> lookup(Memory, Token, Index + 1, Right, MaxWordLength);
 	-1  -> lookup(Memory, Token, Left, Index - 1, MaxWordLength);
-	0  -> {Pos, WordAddress, String}
+	0   -> {Pos, WordAddress, String}
     end.
 
 %% lexicographical comparison of two strings

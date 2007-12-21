@@ -260,9 +260,9 @@ num_propsize_bytes(Memory, PropertyAddress) ->
 	3        -> 1;
 	_Default ->
 	    SizeByte1 = memory:get_byte(Memory, PropertyAddress),
-	    case (SizeByte1 band ?MASK_BIT7) of
-		?MASK_BIT7 -> 2;
-		_Default   -> 1
+	    if 
+		SizeByte1 band ?MASK_BIT7 =:= ?MASK_BIT7 -> 2;
+		true -> 1
 	    end
     end.
     

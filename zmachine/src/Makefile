@@ -2,7 +2,9 @@
 # 
 .SUFFIXES: .erl .beam .yrl
 
-CFLAGS = #-DDEBUG
+CFLAGS = -DDEBUG
+TESTFILE = ../testfiles/amfv.z4
+#TESTFILE = ../testfiles/minizork.z3
 
 .erl.beam:
 	erlc ${CFLAGS} -W $<
@@ -23,7 +25,7 @@ compile: ${MODS:%=%.beam} subdirs
 subdirs:
 
 main: compile
-	${ERL} -noshell -s main main -storyfile ../testfiles/minizork.z3
+	${ERL} -noshell -s main main -storyfile ${TESTFILE}
 
 clean:
 	rm -rf *.beam erl_crash.dump

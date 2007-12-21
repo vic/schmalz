@@ -28,13 +28,22 @@
 
 -module(streams).
 -export([create/0, print_zscii/2, set_status_line/4, get_screen/1,
-	 append_input/2, read_input/1
-	]).
+	 append_input/2, read_input/1, erase_window/2, split_window/2,
+	 set_window/2]).
 -include("include/zscii.hrl").
 -record(streams, {screen_out, current_out, keyboard_in, current_in}).
 
 create() -> #streams{screen_out = screen:create(80), current_out = screen,
 		     keyboard_in = [], current_in = keyboard}.
+
+erase_window(#streams{screen_out = Screen} = Streams, WindowNum) ->
+    Streams#streams{screen_out = screen:erase_window(Screen, WindowNum)}.
+
+set_window(#streams{screen_out = Screen} = Streams, WindowNum) ->
+    Streams#streams{screen_out = screen:set_window(Screen, WindowNum)}.
+
+split_window(#streams{screen_out = Screen} = Streams, Lines) ->
+    Streams#streams{screen_out = screen:split_window(Screen, Lines)}.
 
 print_zscii(#streams{screen_out = Screen, current_out = screen} = Streams,
 	    ZsciiString) ->
