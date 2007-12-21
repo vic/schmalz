@@ -58,8 +58,8 @@ create(Memory) ->
 glk_state(MachineState) -> MachineState#glulx_vm.glk_state.
 
 %% Sets the Glk state
-set_glk_state(MachineState0, GlkState) ->
-    MachineState0#glulx_vm{glk_state = GlkState}.
+set_glk_state(VmState0, GlkState) ->
+    VmState0#glulx_vm{glk_state = GlkState}.
 
 rpc(MachinePid, Message) ->
     MachinePid ! {self(), Message},
@@ -205,12 +205,15 @@ call(MachineState0, Address, NumParams, ReturnAddress, ResultSpec) ->
 				length(MachineState1#glulx_vm.value_stack),
 				ReturnAddress, ResultSpec),
     MachineState2 = push_call_frame(MachineState1, CallFrame, Address),
-    copy_args(MachineState2, Args).
+    MachineState3 = copy_args(MachineState2, Args),
+    io:format("CALL WITH #~p PARAMS on stack, ARGS: ~p, STACK AFTER: ~p~n",
+	      [NumParams, Args, MachineState3#glulx_vm.value_stack]),
+    MachineState3.
 
 %% Pops the specicfied number of elements from the stack.
 %% @spec pop_stack_values(glulx_vm(), int()) -> {[int()], glulx_vm()}.
-pop_stack_values(#glulx_vm{value_stack = ValueStack} = MachineState0,
-		 NumValues) ->
+pop_stack_values(#glulx_vm{value_stack = ValueStack} = VmState0, NumValues) ->
+    VmState1 = verify_pop_stack(VmState0, NumValues),
     Values = lists:sublist(ValueStack, NumValues),
     if
 	length(Values) > 0 ->
@@ -219,7 +222,7 @@ pop_stack_values(#glulx_vm{value_stack = ValueStack} = MachineState0,
 	true ->
 	    NewStack = ValueStack
     end,
-    {Values, MachineState0#glulx_vm{value_stack = NewStack}}.
+    {Values, VmState1#glulx_vm{value_stack = NewStack}}.
     
 %% Call with explicit arguments
 callf(#glulx_vm{memory = Memory, value_stack = ValueStack} = MachineState0,
@@ -287,10 +290,23 @@ return_from_call(#glulx_vm{call_stack = [CallFrame | CallStack],
     store_value(MachineState1, Result, CallFrame#call_frame.result_spec).
 
 pop(#glulx_vm{value_stack = [TopValue | Stack]} = MachineState0) ->
-    {TopValue, MachineState0#glulx_vm{value_stack = Stack}}.
+    MachineState1 = verify_pop_stack(MachineState0, 1),
+    {TopValue, MachineState1#glulx_vm{value_stack = Stack}}.
 
 push(#glulx_vm{value_stack = Stack} = MachineState0, Value) ->
     MachineState0#glulx_vm{value_stack = [Value|Stack]}.
+
+%% check the stack for underflow before popping
+verify_pop_stack(#glulx_vm{value_stack = Stack} = VmState0, NumPopValues) ->
+    MinStackpointer = min_stackpointer(VmState0),
+    if
+	length(Stack) - NumPopValues >= MinStackpointer -> VmState0;
+	true -> halt_vm(VmState0, "Stack underflow !!!!")
+    end.    
+    
+min_stackpointer(#glulx_vm{call_stack = []}) -> 0;
+min_stackpointer(#glulx_vm{call_stack = [CallFrame | _]}) ->
+    CallFrame#call_frame.invocation_sp.
 
 %% Stores a 32 bit value
 store_value(MachineState0, _Value, {const, 0}) -> MachineState0;

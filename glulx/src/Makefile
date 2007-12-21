@@ -3,6 +3,8 @@
 .SUFFIXES: .erl .beam .yrl
 
 CFLAGS = -DDEBUG
+#TESTFILE = ../testfiles/risorg.ulx
+TESTFILE = ../testfiles/Advent.ulx
 
 .erl.beam:
 	erlc ${CFLAGS} -W $<
@@ -22,7 +24,7 @@ compile: ${MODS:%=%.beam} subdirs
 subdirs:
 
 main: compile
-	${ERL} -noshell -s glulx_main main -storyfile ../testfiles/risorg.ulx
+	${ERL} -noshell -s glulx_main main -storyfile ${TESTFILE}
 
 clean:
 	rm -rf *.beam erl_crash.dump

@@ -62,6 +62,7 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?ALOADBIT     -> 3;
 	?ALOADS       -> 3;
 	?ASTORE       -> 3;
+	?ASTOREB      -> 3;
 	?ASTOREBIT    -> 3;
 	?BINARYSEARCH -> 8;
 	?BITAND       -> 3;
@@ -86,8 +87,10 @@ decode_operands(MachinePid, Address, OpcodeNum) ->
 	?JNZ          -> 2;
 	?JUMP         -> 1;
 	?JZ           -> 2;
+	?MOD          -> 3;
 	?MUL          -> 3;
 	?NOP          -> 0;
+	?RANDOM       -> 2;
 	?RETURN       -> 1;
 	?SETIOSYS     -> 2;
 	?SUB          -> 3;

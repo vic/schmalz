@@ -41,16 +41,38 @@
 %%%-----------------------------------------------------------------------
 
 -module(glk_win).
--export([init/0, window_open/2, put_string/3, set_style/3]).
+-export([init/0, window_open/2, window_get_size/2, window_clear/2, put_string/3,
+	 set_style/3]).
 -include("include/glk.hrl").
 
--record(glk_windows, {nextid, windowtree}).
+-record(glk_windows, {nextid, num_rows, num_cols, windowtree}).
 -record(glk_pair_window, {id, direction, division_type,
 			  child1, size1, child2, size2}).
 -record(glk_window, {id, type, rock, buffer}).
 
-init() -> #glk_windows{nextid = 1, windowtree = undef}.
+init() -> #glk_windows{nextid = 1, num_rows =  40, num_cols = 80,
+		       windowtree = undef}.
 
+%% A horribly simple size method which only supports standard
+%% Z-machine layout
+window_get_size(#glk_windows{windowtree = WindowTree, num_cols = NumCols},
+		WindowId) ->
+    Window = get_window(WindowTree, WindowId),
+    #glk_window{type = WinType} = Window,
+    Parent = get_parent(WindowTree, WindowId),
+    #glk_pair_window{division_type = DivType, direction = Direction} = Parent,
+    if
+	Window =:= Parent#glk_pair_window.child1 ->
+	    Size = Parent#glk_pair_window.size1;
+	true ->
+	    Size = Parent#glk_pair_window.size2
+    end,
+    if
+	Direction =:= vertical, DivType =:= fixed, WinType =:= textgrid ->
+	    {NumCols, Size};
+	true -> undef 
+    end.
+    
 window_open(#glk_windows{nextid = NextId, windowtree = undef}
 	    = GlkWindows0, [0, _, _, Wintype, Rock]) ->
     io:format("OPENING INITIAL WINDOW, "
@@ -162,17 +184,68 @@ put_string(#glk_windows{windowtree = WindowTree}
 		  = GlkWindows0, WindowId, String) ->
     GlkWindows0#glk_windows{
       windowtree = put_string(WindowTree, WindowId, String)};
-put_string(#glk_window{id = WindowId, buffer = Buffer} = GlkWindow0,
-		  WindowId, String) ->
-    GlkWindow0#glk_window{buffer = Buffer ++ String};
-put_string(#glk_window{id = _}, _, _) -> notfound;
-put_string(#glk_pair_window{child1 = Child1, child2 = Child2}
-		  = PairWindow0, WindowId, String) ->
-    WindowTree = put_string(Child1, WindowId, String),
+put_string(WindowTree, WindowId, String) ->
+    Window = get_window(WindowTree, WindowId),
+    #glk_window{buffer = Buffer} = Window,
+    replace_window(WindowTree, Window#glk_window{buffer = Buffer ++ String}).
+
+% Clears the window
+window_clear(#glk_windows{windowtree = WindowTree} = GlkWindows0, WindowId) ->
+    GlkWindows0#glk_windows{
+      windowtree = window_clear(WindowTree, WindowId)};
+window_clear(WindowTree, WindowId) ->
+    Window = get_window(WindowTree, WindowId),
+    replace_window(WindowTree, Window#glk_window{buffer = []}).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%% DFS helpers
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Performs a DFS search to retrieve the specified window record
+get_window(#glk_window{id = WindowId} = Window, WindowId) -> Window;
+get_window(#glk_window{}, _) -> notfound;
+get_window(#glk_pair_window{child1 = Child1, child2 = Child2}, WindowId) ->
+    Result1 = get_window(Child1, WindowId),
+    case Result1 of
+	notfound -> get_window(Child2, WindowId);
+	_Default -> Result1
+    end.
+
+%% Performs a DFS search to retrieve the specified window's direct parent
+get_parent(#glk_window{}, _) -> notfound;
+get_parent(#glk_pair_window{child1 = #glk_window{id = WindowId}} = Parent,
+	   WindowId) ->
+    Parent;
+get_parent(#glk_pair_window{child2 = #glk_window{id = WindowId}} = Parent,
+	   WindowId) ->
+    Parent;
+get_parent(#glk_pair_window{child1 = Child1, child2 = Child2}, WindowId) ->
+    Result1 = get_parent(Child1, WindowId),
+    case Result1 of
+	notfound -> get_parent(Child2, WindowId);
+	_Default -> Result1
+    end.
+
+%% Performs a DFS search to replace the window in its direct parent
+replace_window(#glk_window{}, _) -> notfound;
+replace_window(#glk_pair_window{child1 = #glk_window{id = WindowId}} = Parent,
+	       #glk_window{id = WindowId} = NewWindow) ->
+    Parent#glk_pair_window{child1 = NewWindow};
+replace_window(#glk_pair_window{child2 = #glk_window{id = WindowId}} = Parent,
+	       #glk_window{id = WindowId} = NewWindow) ->
+    Parent#glk_pair_window{child2 = NewWindow};
+replace_window(#glk_pair_window{child1 = #glk_pair_window{id = WindowId}} 
+	       = Parent, #glk_pair_window{id = WindowId} = NewWindow) ->
+    Parent#glk_pair_window{child1 = NewWindow};
+replace_window(#glk_pair_window{child2 = #glk_pair_window{id = WindowId}}
+	       = Parent, #glk_pair_window{id = WindowId} = NewWindow) ->
+    Parent#glk_pair_window{child2 = NewWindow};
+replace_window(#glk_pair_window{child1 = Child1, child2 = Child2} = Parent,
+	       NewWindow) ->
+    WindowTree = replace_window(Child1, NewWindow),
     case WindowTree of
 	notfound ->
-	    PairWindow0#glk_pair_window{
-	      child2 = put_string(Child2, WindowId, String)};
+	    Parent#glk_pair_window{child2 = replace_window(Child2, NewWindow)};
 	_Default ->
-	    PairWindow0#glk_pair_window{child1 = WindowTree}
+	    Parent#glk_pair_window{child1 = WindowTree}
     end.

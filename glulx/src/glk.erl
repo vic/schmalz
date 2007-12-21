@@ -78,6 +78,8 @@ get_op(Selector) ->
     case Selector of
 	?GLK_WINDOW_ITERATE      -> fun glk_window_iterate/3;
 	?GLK_WINDOW_OPEN         -> fun glk_window_open/3;
+	?GLK_WINDOW_GET_SIZE     -> fun glk_window_get_size/3;
+	?GLK_WINDOW_CLEAR        -> fun glk_window_clear/3;
 	?GLK_SET_WINDOW          -> fun glk_set_window/3;
 	?GLK_STREAM_ITERATE      -> fun glk_stream_iterate/3;
 	?GLK_STREAM_OPEN_MEMORY  -> fun glk_stream_open_memory/3;
@@ -96,6 +98,9 @@ func_name(Selector) ->
     case Selector of
 	?GLK_WINDOW_ITERATE      -> glk_window_iterate;
 	?GLK_WINDOW_OPEN         -> glk_window_open;
+	?GLK_WINDOW_GET_SIZE     -> glk_window_get_size;
+	?GLK_WINDOW_CLEAR        -> glk_window_clear;
+	?GLK_WINDOW_MOVE_CURSOR  -> glk_window_move_cursor;
 	?GLK_SET_WINDOW          -> glk_set_window;
 	?GLK_STREAM_ITERATE      -> glk_stream_iterate;
 	?GLK_STREAM_OPEN_MEMORY  -> glk_stream_open_memory;
@@ -125,7 +130,7 @@ set_output_param32(VmMod, VmState0, MemoryRef, Value) ->
 %% Sets an array of 32 bit values to the target
 %% @spec set_output_param(atom(), vm_state(), int(), [int()]) -> vmstate().
 set_output_array32(_, VmState0, 0, _)                            -> VmState0;
-set_output_array32(VmMod, VmState0, _, [])                       -> VmState0;
+set_output_array32(_, VmState0, _, [])                           -> VmState0;
 set_output_array32(VmMod, VmState0, -1, [Value|Values])          ->
     set_output_array32(VmMod, VmMod:push(VmState0, Value), -1, Values);
 set_output_array32(VmMod, VmState0, MemoryRef, [Value | Values]) ->
@@ -234,6 +239,21 @@ glk_set_window(VmMod, VmState0, [WindowId]) ->
 				    window_stream(Streams, WindowId)},
     {void, VmMod:set_glk_state(VmState0, GlkState1)}.
 
+glk_window_get_size(VmMod, VmState0, [WindowId, WidthPtr, HeightPtr]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    {Width, Height} = glk_win:window_get_size(GlkState0#glk_state.windows,
+					      WindowId),
+    VmState1 = set_output_param32(VmMod, VmState0, WidthPtr, Width),
+    VmState2 = set_output_param32(VmMod, VmState1, HeightPtr, Height),
+    {void, VmState2}.
+
+glk_window_clear(VmMod, VmState0, [WindowId]) ->
+    GlkState0 = VmMod:glk_state(VmState0),
+    GlkState1 = GlkState0#glk_state{
+		  windows = glk_win:window_clear(GlkState0#glk_state.windows,
+						 WindowId)},
+    {void, VmMod:set_glk_state(VmState0, GlkState1)}.
+
 % Fileref
 glk_fileref_iterate(VmMod, VmState0, [_CurrStream, RockPtr]) ->
     Rock = 0,
@@ -259,6 +279,7 @@ init_streams() -> #glk_streams{nextid = 1, streams = []}.
 %% Adds a new stream to the stream list
 add_stream(#glk_state{streams=#glk_streams{nextid=NextId, streams=Streams}
 		      = GlkStreams0} = GlkState0, Type, Ref) ->
+    io:format("ADD_STREAM, NEXT_ID: ~p~n", [GlkStreams0]),
     Stream = #glk_stream{id = NextId, type = Type, ref = Ref},
     {NextId, GlkState0#glk_state{
 	       streams=GlkStreams0#glk_streams{
@@ -303,10 +324,11 @@ close_stream_object(_, _, _, _) -> undef.
     
 %% Removes the specified stream from the stream list. If the removed stream
 %% was the active stream, set the active stream to null.
-remove_stream(#glk_state{streams=#glk_streams{streams=StreamList}} = GlkState0,
+remove_stream(#glk_state{streams=#glk_streams{streams=StreamList} 
+			 = GlkStreams0} = GlkState0,
 	      #glk_stream{id = StreamId} = Stream) ->
     GlkState1 = GlkState0#glk_state{
-		  streams = #glk_streams{
+		  streams = GlkStreams0#glk_streams{
 		    streams = lists:delete(Stream, StreamList)}},
     % If Stream was current stream, set current stream to null
     io:format("REMOVE_STREAM, ACTIVE STREAM: ~w, StreamId: ~w~n",

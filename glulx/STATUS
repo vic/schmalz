@@ -1,9 +1,17 @@
 This is the Glulx component of Schmalz, the Erlang Interactive
 Fiction system.
 
+Description:
+------------
+Glulx is a virtual machine 
+
 Status:
 -------
 
-Currently, Glulx support is in the prototyping and concept phase.
+Currently, Glulx support is in the prototyping and concept phase. It can
+run a couple of thousand lines of "Adventure" and "Risorgimento Represso"
+before crashing.
+Also, this VM includes a rudimentary Glk implementation.
+
 
 

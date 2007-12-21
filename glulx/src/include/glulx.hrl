@@ -28,6 +28,7 @@
 -define(ALOADBIT,     16#4b).
 -define(ALOADS,       16#49).
 -define(ASTORE,       16#4c).
+-define(ASTOREB,      16#4e).
 -define(ASTOREBIT,    16#4f).
 -define(BINARYSEARCH, 16#151).
 -define(BITAND,       16#18).
@@ -52,8 +53,10 @@
 -define(JNZ,          16#23).
 -define(JUMP,         16#20).
 -define(JZ,           16#22).
+-define(MOD,          16#14).
 -define(MUL,          16#12).
 -define(NOP,          16#00).
+-define(RANDOM,       16#110).
 -define(RETURN,       16#31).
 -define(SETIOSYS,     16#149).
 -define(SUB,          16#11).

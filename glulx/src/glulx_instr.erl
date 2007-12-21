@@ -52,6 +52,7 @@ get_operation(OpcodeNum) ->
 	?ALOADBIT     -> fun aloadbit/2;
 	?ALOADS       -> fun aloads/2;
 	?ASTORE       -> fun astore/2;
+	?ASTOREB      -> fun astoreb/2;
 	?ASTOREBIT    -> fun astorebit/2;
 	?BINARYSEARCH -> fun binarysearch/2;
 	?BITAND       -> fun bitand/2;
@@ -76,8 +77,10 @@ get_operation(OpcodeNum) ->
 	?JNZ          -> fun jnz/2;
 	?JUMP         -> fun jump/2;
 	?JZ           -> fun jz/2;
+	?MOD          -> fun mod/2;
 	?MUL          -> fun mul/2;
 	?NOP          -> fun nop/2;
+	?RANDOM       -> fun random/2;
 	?RETURN       -> fun return/2;
 	?SETIOSYS     -> fun setiosys/2;
 	?SUB          -> fun sub/2;
@@ -156,6 +159,10 @@ aloads(MachinePid, #instr{operands = Operands}) ->
 
 astore(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({set_word32, ?OPERAND_VALUE(1) + 4 * ?OPERAND_VALUE(2),
+		   ?OPERAND_VALUE(3)}).
+
+astoreb(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({set_byte, ?OPERAND_VALUE(1) + ?OPERAND_VALUE(2),
 		   ?OPERAND_VALUE(3)}).
 
 astorebit(MachinePid, #instr{operands = Operands}) ->
@@ -276,11 +283,24 @@ jump(MachinePid, #instr{operands = Operands} = Instruction) ->
 jz(MachinePid, #instr{operands = Operands} = Instruction) ->
    ?branch_or_advance(?OPERAND_VALUE(1) =:= 0, ?OPERAND_VALUE(2)).
 
+mod(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, ?OPERAND_VALUE(1) rem ?OPERAND_VALUE(2),
+		   ?OPERAND(3)}).
+
 mul(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({store_value, ?OPERAND_VALUE(1) * ?OPERAND_VALUE(2),
 		   ?OPERAND(3)}).
 
 nop(_MachinePid, _Instruction) -> nop.
+
+random(MachinePid, #instr{operands = Operands}) ->
+    ?call_machine({store_value, generate_random(?OPERAND_VALUE(1)),
+		   ?OPERAND(2)}).
+
+generate_random(N) when N > 0  -> random:uniform(N) - 1;
+generate_random(N) when N < 0  -> - (random:uniform(-N) - 1);
+generate_random(0)             -> undef.
+    
 
 return(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({return_from_call, ?OPERAND_VALUE(1)}).
@@ -373,6 +393,7 @@ op_name(OpcodeNum) ->
 	?ALOADBIT     -> aloadbit;
 	?ALOADS       -> aloads;
 	?ASTORE       -> astore;
+	?ASTOREB      -> astoreb;
 	?ASTOREBIT    -> astorebit;
 	?BINARYSEARCH -> binarysearch;
 	?BITAND       -> bitand;
@@ -397,8 +418,10 @@ op_name(OpcodeNum) ->
 	?JNZ          -> jnz;
 	?JUMP         -> jump;
 	?JZ           -> jz;
+	?MOD          -> mod;
 	?MUL          -> mul;
 	?NOP          -> nop;
+	?RANDOM       -> random;
 	?RETURN       -> return;
 	?SETIOSYS     -> setiosys;
 	?SUB          -> sub;

@@ -22,6 +22,9 @@
 % GLK Selectors
 -define(GLK_WINDOW_ITERATE,      16#20).
 -define(GLK_WINDOW_OPEN,         16#23).
+-define(GLK_WINDOW_GET_SIZE,     16#25).
+-define(GLK_WINDOW_CLEAR,        16#2a).
+-define(GLK_WINDOW_MOVE_CURSOR,  16#2b).
 -define(GLK_SET_WINDOW,          16#2f).
 -define(GLK_STREAM_ITERATE,      16#40).
 -define(GLK_STREAM_OPEN_MEMORY,  16#43).
