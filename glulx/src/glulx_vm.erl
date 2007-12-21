@@ -24,7 +24,7 @@
 
 -module(glulx_vm).
 -export([create/1, rpc/2, glk_state/1, set_glk_state/2,
-	 set_word32/3, halt_vm/2, push/2, pop/1]).
+	 set_byte/3, set_word32/3, halt_vm/2, push/2, pop/1]).
 -include("include/glulx.hrl").
 -include("include/glk.hrl").
 
@@ -277,6 +277,7 @@ return_from_call(#glulx_vm{call_stack = [CallFrame | CallStack],
 			   value_stack = ValueStack}
      = MachineState0, Result) ->
     ReturnAddress = CallFrame#call_frame.return_address,
+    io:format("Restore stack to: ~w~n", [CallFrame#call_frame.invocation_sp]),
     NewValueStack = lists:nthtail(length(ValueStack) -
 				  CallFrame#call_frame.invocation_sp,
 				  ValueStack),
@@ -369,6 +370,7 @@ set_ram_byte(#glulx_vm{memory = Memory} = MachineState0, RamOffset, Value) ->
 %% @spec decode_function(GlulxMem(), int()) -> call_frame().
 decode_function(Memory, Address, InvocationSP, ReturnAddress,
 		ResultSpec) ->
+    io:format("Function call, saving stack pointer to: ~w~n", [InvocationSP]),
     #call_frame{type = glulx_mem:get_byte(Memory, Address),
 		result_spec = ResultSpec,
 		return_address = ReturnAddress,
