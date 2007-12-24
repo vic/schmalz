@@ -258,11 +258,6 @@ jgt(MachinePid, #instr{operands = Operands} = Instruction) ->
 		      ?OPERAND_VALUE(3)).
 
 jle(MachinePid, #instr{operands = Operands} = Instruction) ->
-    io:format("@JLE ~w ~w ~p: ~p~n", [?SIGNED_OPERAND_VALUE(1),
-				  ?SIGNED_OPERAND_VALUE(2),
-				  ?OPERAND_VALUE(3),
-				  (?SIGNED_OPERAND_VALUE(1) =<
-				   ?SIGNED_OPERAND_VALUE(2))]),
     ?branch_or_advance(?SIGNED_OPERAND_VALUE(1) =< ?SIGNED_OPERAND_VALUE(2),
 		      ?OPERAND_VALUE(3)).
 
@@ -325,7 +320,6 @@ streamstr(MachinePid, #instr{operands = Operands}) ->
     ?call_machine({streamstr, ?OPERAND_VALUE(1)}).
 
 branch_or_advance(MachinePid, false, _Offset, Instruction) ->
-    %io:format("INC PC by: ~w~n", [Instruction#instr.length]),
     ?call_machine({inc_pc, Instruction#instr.length});
 branch_or_advance(MachinePid, true, 0, _Instruction) ->
     ?call_machine({return_from_call, 0});
@@ -334,8 +328,6 @@ branch_or_advance(MachinePid, true, 1, _Instruction) ->
 branch_or_advance(MachinePid, true, Offset,
 		  #instr{address = InstrAddress, length = Length,
 			 opnum_len = _OpNumLen}) ->
-    %io:format("branch, InstrAddr: ~w, Length: ~w, OpNumLen: ~w, Offset = ~w~n",
-%	      [InstrAddress, Length, OpNumLen, Offset]),
     ?call_machine({set_pc, InstrAddress + Length + Offset - 2}).
 
 operand_value(MachinePid, Operands, Num) ->

@@ -299,6 +299,7 @@ push(#glulx_vm{value_stack = Stack} = MachineState0, Value) ->
 %% check the stack for underflow before popping
 verify_pop_stack(#glulx_vm{value_stack = Stack} = VmState0, NumPopValues) ->
     MinStackpointer = min_stackpointer(VmState0),
+    %io:format("verify_pop_stack, # pop values: ~w, minstackptr: ~w, stacklen: ~w~n", [NumPopValues, MinStackpointer, length(Stack)]),
     if
 	length(Stack) - NumPopValues >= MinStackpointer -> VmState0;
 	true -> halt_vm(VmState0, "Stack underflow !!!!")
