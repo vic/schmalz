@@ -204,6 +204,7 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	?PULL             -> fun pull/2;
 	?PUT_PROP         -> fun put_prop/2;
 	?RANDOM           -> fun random/2;
+	?SET_TEXT_STYLE   -> fun set_text_style/2;
 	?SET_WINDOW       -> fun set_window/2;
 	?SOUND_EFFECT     -> fun sound_effect/2;
 	?SPLIT_WINDOW     -> fun split_window/2;
@@ -485,6 +486,10 @@ set_attr(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_attribute, ?param(1), ?param(2)}).
 
+set_text_style(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    ?call_machine({set_text_style, ?param(1)}).
+
 set_window(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_window, ?param(1)}).
@@ -717,6 +722,7 @@ oc_var_op_name(OpcodeNum) ->
 	?PULL           -> pull;
 	?PUT_PROP       -> put_prop;
 	?RANDOM         -> random;
+	?SET_CURSOR     -> set_cursor;
 	?SET_TEXT_STYLE -> set_text_style;
 	?SET_WINDOW     -> set_window;
 	?SOUND_EFFECT   -> sound_effect;

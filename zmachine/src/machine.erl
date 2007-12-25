@@ -31,7 +31,8 @@
 %%%-----------------------------------------------------------------------
 -module(machine).
 -export([create/1, rpc/2, print/1, print_locals/1, dump_input_buffer/1]).
--record(machine_state, {memory, value_stack, call_stack, pc, streams, status}).
+-record(machine_state, {memory, value_stack, call_stack, pc, streams,
+			screen, status}).
 -record(routine, {start_address, return_address, invocation_sp, local_vars,
 		  return_variable}).
 -define(STACK, 0).
@@ -45,7 +46,9 @@ create(Memory) ->
     MachineState = #machine_state {memory = Memory, value_stack = [],
 				   call_stack = [],
 				   pc = memory:initial_pc(Memory),
-				   streams = streams:create(), status = run},
+				   streams = streams:create(),
+				   screen = screen:create(80),
+				   status = run},
     spawn(fun() -> listen(MachineState) end).
 
 rpc(MachinePid, Message) ->
@@ -214,6 +217,10 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    listen(MachineState1);
 	{From, {split_window, Lines}} ->
 	    MachineState1 = split_window(MachineState0, Lines),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {set_text_style, StyleFlags}} ->
+	    MachineState1 = set_text_style(MachineState0, StyleFlags),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, {set_window, WindowNum}} ->
@@ -439,18 +446,19 @@ store_tokens(Memory0, Address, [{Pos, WordAddress, String} | Tokens]) ->
 %%% I/O
 %%%-----------------------------------------------------------------------
 
-print_zscii(#machine_state{streams = Streams} = MachineState, ZsciiString) ->
+print_zscii(#machine_state{streams = Streams, screen = Screen} = MachineState,
+	    ZsciiString) ->
     MachineState#machine_state{
-      streams = streams:print_zscii(Streams, ZsciiString)}.
+      screen = streams:print_zscii(Streams, Screen, ZsciiString)}.
 
-get_screen(#machine_state{streams = Streams0} = MachineState) ->
-    {ScreenBuffer, Streams1} = streams:get_screen(Streams0),
-    {ScreenBuffer, MachineState#machine_state{streams = Streams1}}.
+get_screen(#machine_state{screen = Screen0} = MachineState) ->
+    {ScreenBuffer, Screen1} = screen:get_screen(Screen0),
+    {ScreenBuffer, MachineState#machine_state{screen = Screen1}}.
 
-update_status_line(#machine_state{memory = Memory, streams = Streams}
+update_status_line(#machine_state{memory = Memory, screen = Screen}
 		  = MachineState) ->
-    MachineState#machine_state{streams = streams:set_status_line(
-					   Streams,
+    MachineState#machine_state{screen = screen:set_status_line(
+					   Screen,
 					   objects:name(Memory,
 							get_global_var(Memory,
 								       1)),
@@ -469,14 +477,18 @@ read_input(#machine_state{streams = Streams0} = MachineState) ->
 dump_input_buffer(#machine_state{streams = Streams}) ->
     streams:dump_input(Streams).
 
-erase_window(#machine_state{streams = Streams} = VmState0, WindowNum) ->
-    VmState0#machine_state{streams = streams:erase_window(Streams, WindowNum)}.
+erase_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
+    VmState0#machine_state{screen = screen:erase_window(Screen, WindowNum)}.
 
-split_window(#machine_state{streams = Streams} = VmState0, Lines) ->
-    VmState0#machine_state{streams = streams:split_window(Streams, Lines)}.
+split_window(#machine_state{screen = Screen} = VmState0, Lines) ->
+    VmState0#machine_state{screen = screen:split_window(Screen, Lines)}.
 
-set_window(#machine_state{streams = Streams} = VmState0, WindowNum) ->
-    VmState0#machine_state{streams = streams:set_window(Streams, WindowNum)}.
+set_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
+    VmState0#machine_state{screen = screen:set_window(Screen, WindowNum)}.
+
+set_text_style(#machine_state{screen = Screen} = VmState0, StyleFlags) ->
+    VmState0#machine_state{screen = screen:set_text_style(Screen,
+							   StyleFlags)}.
 
 %%%-----------------------------------------------------------------------
 %%% State printing

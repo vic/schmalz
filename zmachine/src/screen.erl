@@ -30,13 +30,23 @@
 
 -module(screen).
 -export([create/1, status_line/1, set_status_line/4, bottom_window/1,
-	 print_zscii/2, split_window/2, erase_window/2, set_window/2]).
+	 print_zscii/2, split_window/2, erase_window/2, set_window/2,
+	 set_text_style/2, get_screen/1]).
+
+-define(STYLE_ROMAN,         0).
+-define(STYLE_REVERSE_VIDEO, 1).
+-define(STYLE_BOLD,          2).
+-define(STYLE_ITALIC,        4).
+-define(STYLE_FIXED,         8).
 
 -record(screen, {status_line, window_top, window_bottom, current}).
+-record(text_grid, {num_rows, num_cols, buffer, style, cursorx, cursory}).
 
 create(NumColumns) ->
     #screen{status_line = {"(Empty)", 0, 0},
-	    window_top = {0, NumColumns, []},
+	    window_top = #text_grid{num_rows = 0, num_cols = NumColumns,
+				    buffer = [], style = 0, cursorx = 1,
+			            cursory = 1},
 	    window_bottom = [], current = bottom}.
 
 status_line(#screen{status_line = {ObjectName, Value1, Value2}}) ->
@@ -51,21 +61,46 @@ bottom_window(#screen{window_bottom = WindowBottom} = Screen) ->
 print_zscii(#screen{window_bottom = Window} = Screen, ZsciiString) ->
     Screen#screen{window_bottom = Window ++ ZsciiString}.
 
-split_window(#screen{window_top = {_, NumColumns, Rows}} = Screen,
-	     NewNumRows) ->
+split_window(#screen{window_top = #text_grid{num_cols = NumColumns,
+					     buffer = Rows} = TopWindow}
+	     = Screen, NewNumRows) ->
     Diff = NewNumRows - length(Rows),
     NewRows =
 	if
 	    Diff =< 0 -> Rows;
 	    true -> Rows ++ generate_empty_rows(Diff, NumColumns)
     end,
-    Screen#screen{window_top = {NewNumRows, NumColumns, NewRows}}.
+    Screen#screen{window_top = TopWindow#text_grid{num_rows = NewNumRows,
+						   buffer = NewRows}}.
 
-erase_window(#screen{window_top = {_, NumColumns, _}} = Screen, -1) ->
-    create(NumColumns).
+erase_window(#screen{window_top = WindowTop}, -1) ->
+    create(WindowTop#text_grid.num_cols).
 
 set_window(Screen, 0) -> Screen#screen{current = bottom};
 set_window(Screen, 1) -> Screen#screen{current = top}.
+
+set_text_style(#screen{current = top, window_top = WindowTop} = Screen,
+	       StyleFlags) ->
+    Screen#screen{window_top = WindowTop#text_grid{style = StyleFlags}};
+set_text_style(#screen{current = bottom, window_bottom = WindowBottom} = Screen,
+	       StyleFlags) ->
+    Screen#screen{window_bottom = WindowBottom ++ style_string(StyleFlags)}.
+
+style_string(?STYLE_ROMAN)         -> "{STYLE_ROMAN->}";
+style_string(?STYLE_REVERSE_VIDEO) -> "{STYLE_REVERSE_VIDEO->}";
+style_string(?STYLE_BOLD)          -> "{STYLE_BOLD->}";
+style_string(?STYLE_ITALIC)        -> "{STYLE_ITALIC->}";
+style_string(?STYLE_FIXED)         -> "{STYLE_FIXED->}";
+style_string(_)                    -> "{STYLE_ROMAN->}".
      
 generate_empty_rows(NumRows, NumColumns) ->
     lists:duplicate(NumRows, lists:duplicate(NumColumns, {[], " "})).
+
+get_screen(Screen) ->
+    {ObjectName, Value1, Value2} = Screen#screen.status_line,
+    WindowBottom = Screen#screen.window_bottom,
+    {ok, WindowBottomStr, _} = regexp:gsub(WindowBottom, "\r", "\n"),
+    {io_lib:format("~s ~w-~w~n~s",
+		   [ObjectName, Value1, Value2, WindowBottomStr]),
+    Screen#screen{window_bottom = []}}.
+
