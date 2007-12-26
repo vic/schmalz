@@ -210,6 +210,10 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    MachineState1 = sread(MachineState0, TextBuffer, ParseBuffer),
 	    ack(From, ok),
 	    listen(MachineState1);
+	{From, {read_char, StoreVar}} ->
+	    MachineState1 = read_char(MachineState0, StoreVar),
+	    ack(From, ok),
+	    listen(MachineState1);
 	% Window operations
 	{From, {erase_window, WindowNum}} ->
 	    MachineState1 = erase_window(MachineState0, WindowNum),
@@ -217,6 +221,10 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    listen(MachineState1);
 	{From, {split_window, Lines}} ->
 	    MachineState1 = split_window(MachineState0, Lines),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {set_cursor, Line, Column}} ->
+	    MachineState1 = set_cursor(MachineState0, Line, Column),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, {set_text_style, StyleFlags}} ->
@@ -228,6 +236,7 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From,Other} ->
+	    io:format("Error in VM request: ~p~n", [Other]),
 	    ack(From, {error, Other}),
 	    listen(MachineState0)
     end.
@@ -470,6 +479,10 @@ append_input(#machine_state{streams = Streams} = MachineState,
     MachineState#machine_state{streams = streams:append_input(Streams,
 							      InputString)}.
 
+read_char(VmState0, StoreVar) ->
+    {[Char | _], VmState1} = read_input(VmState0),
+    set_var(VmState1, StoreVar, Char band 16#ff).
+
 read_input(#machine_state{streams = Streams0} = MachineState) ->
     {InputString, Streams1} = streams:read_input(Streams0),
     {InputString, MachineState#machine_state{streams = Streams1}}.
@@ -483,12 +496,15 @@ erase_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
 split_window(#machine_state{screen = Screen} = VmState0, Lines) ->
     VmState0#machine_state{screen = screen:split_window(Screen, Lines)}.
 
+set_cursor(#machine_state{screen = Screen} = VmState0, Line, Column) ->
+    VmState0#machine_state{screen = screen:set_cursor(Screen, Line, Column)}.
+
 set_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
     VmState0#machine_state{screen = screen:set_window(Screen, WindowNum)}.
 
 set_text_style(#machine_state{screen = Screen} = VmState0, StyleFlags) ->
     VmState0#machine_state{screen = screen:set_text_style(Screen,
-							   StyleFlags)}.
+							  StyleFlags)}.
 
 %%%-----------------------------------------------------------------------
 %%% State printing

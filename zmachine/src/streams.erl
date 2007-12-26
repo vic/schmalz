@@ -34,7 +34,7 @@
 create() -> #streams{current_out = screen, keyboard_in = [],
 		     current_in = keyboard}.
 
-print_zscii(#streams{current_out = screen} = Streams,
+print_zscii(#streams{current_out = screen},
 	    Screen, ZsciiString) ->
     screen:print_zscii(Screen, ZsciiString).
 

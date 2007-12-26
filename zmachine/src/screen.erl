@@ -30,8 +30,8 @@
 
 -module(screen).
 -export([create/1, status_line/1, set_status_line/4, bottom_window/1,
-	 print_zscii/2, split_window/2, erase_window/2, set_window/2,
-	 set_text_style/2, get_screen/1]).
+	 print_zscii/2, split_window/2, erase_window/2,
+	 set_cursor/3, set_window/2, set_text_style/2, get_screen/1]).
 
 -define(STYLE_ROMAN,         0).
 -define(STYLE_REVERSE_VIDEO, 1).
@@ -75,6 +75,11 @@ split_window(#screen{window_top = #text_grid{num_cols = NumColumns,
 
 erase_window(#screen{window_top = WindowTop}, -1) ->
     create(WindowTop#text_grid.num_cols).
+
+set_cursor(#screen{current = top, window_top = WindowTop} = Screen,
+	   Line, Column) ->
+    Screen#screen{window_top = WindowTop#text_grid{cursorx = Column,
+						    cursory = Line}}.
 
 set_window(Screen, 0) -> Screen#screen{current = bottom};
 set_window(Screen, 1) -> Screen#screen{current = top}.

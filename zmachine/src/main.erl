@@ -57,7 +57,7 @@ run(MachinePid, Num) ->
     Status = machine:rpc(MachinePid, status),
     if
         Status =:= halt -> halt;
-	Status =:= sread ->
+	Status =:= sread; Status =:= read_char ->
             machine:rpc(MachinePid, update_status_line),
 	    % flush the output buffer
             Output = machine:rpc(MachinePid, get_screen),
@@ -66,16 +66,14 @@ run(MachinePid, Num) ->
 	    Input2 = string:substr(Input, 1, string:len(Input) - 1),
 	    machine:rpc(MachinePid, {send_input, Input2}),
 	    % decode and execute again
-            Instruction = decode_instr:get_instruction(MachinePid),
-            ?print_instruction(Instruction),
-            instruction:execute(Instruction, MachinePid),
-	    run(MachinePid, Num);
+	    decode_and_execute(MachinePid, Num);
         true ->
-            Instruction = decode_instr:get_instruction(MachinePid),
-            ?print_instruction(Instruction),
-            instruction:execute(Instruction, MachinePid),
-	    %machine:print(NewMachineState),
-	    %io:fwrite("\n"),
-	    run(MachinePid, Num + 1)
+	    decode_and_execute(MachinePid, Num + 1)
     end.
 
+decode_and_execute(MachinePid, Num) ->
+    Instruction = decode_instr:get_instruction(MachinePid),
+    ?print_instruction(Instruction),
+    instruction:execute(Instruction, MachinePid),
+    run(MachinePid, Num).
+    

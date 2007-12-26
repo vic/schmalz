@@ -65,6 +65,7 @@ is_store(_OpCount, _OpcodeNum, _Version) -> false.
 % determines whether the specified opcode is a call
 is_call(oc_var, OpcodeNum, _Version) when OpcodeNum =:= ?CALL    -> true;
 is_call(oc_2op, OpcodeNum, _Version) when OpcodeNum =:= ?CALL_2S -> true;
+is_call(oc_1op, ?CALL_1S, 4)                                     -> true;
 is_call(_OpCount, _OpcodeNum, _Version)                          -> false.
 
 is_return(oc_1op, ?RET, _Version)                           -> true;

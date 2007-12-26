@@ -118,7 +118,8 @@ update_pc(#instruction{operand_count = OperandCount, opcode_num = OpcodeNum,
     IsBranch = instruction_info:is_branch(OperandCount, OpcodeNum, Version),
     IsReturn = instruction_info:is_return(OperandCount, OpcodeNum, Version),
     IsJump   = instruction_info:is_jump(OperandCount, OpcodeNum, Version),
-    IsReading = ?call_machine(status) =:= sread,
+    Status = ?call_machine(status),
+    IsReading = (Status =:= sread) or (Status =:= read_char),
     if
 	IsCall; IsBranch; IsReturn; IsJump;
 	IsReading -> keep_pc;
@@ -145,6 +146,7 @@ get_operation(#instruction{operand_count = oc_0op, opcode_num = OpcodeNum },
 get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum },
 	      _MachinePid) ->
     case OpcodeNum of
+	?CALL_1S          -> fun call_1s/2;
 	?DEC              -> fun dec/2;
 	?GET_CHILD        -> fun get_child/2;
 	?GET_PARENT       -> fun get_parent/2;
@@ -204,6 +206,8 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	?PULL             -> fun pull/2;
 	?PUT_PROP         -> fun put_prop/2;
 	?RANDOM           -> fun random/2;
+	?READ_CHAR        -> fun read_char/2;
+	?SET_CURSOR       -> fun set_cursor/2;
 	?SET_TEXT_STYLE   -> fun set_text_style/2;
 	?SET_WINDOW       -> fun set_window/2;
 	?SOUND_EFFECT     -> fun sound_effect/2;
@@ -233,6 +237,10 @@ buffer_mode(_, _) -> void. % not implemented
 call(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [ PackedAddress | Arguments] = params(MachinePid, Operands),
     call_with_result(Instruction, PackedAddress, Arguments, MachinePid).
+
+call_1s(#instruction{operands = Operands} = Instruction, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    call_with_result(Instruction, ?param(1), [], MachinePid).
 
 call_2s(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
@@ -464,6 +472,20 @@ random(#instruction{operands = Operands, store_variable = StoreVar},
 	    ?store_var(random:uniform(?param(1)))
     end.
 
+read_char(#instruction{store_variable = StoreVar}, MachinePid) ->
+    MachineStatus = ?call_machine(status),
+    if
+	MachineStatus =:= run ->
+	    % if this is the first invocation of the READ instruction,
+	    % change machine status to sread
+            ?call_machine({set_status, read_char});
+        true ->
+	    % this is the second invocation, parse the input
+	    % and write the results into the buffers
+	    ?call_machine({read_char, StoreVar}),
+            ?call_machine({set_status, run})
+    end.
+
 remove_obj(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({remove_object, ?param(1)}).
@@ -485,6 +507,10 @@ rtrue(_Instruction, MachinePid) ->
 set_attr(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_attribute, ?param(1), ?param(2)}).
+
+set_cursor(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    ?call_machine({set_cursor, ?param(1), ?param(2)}).
 
 set_text_style(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
@@ -663,6 +689,7 @@ oc_0op_op_name(OpcodeNum) ->
 
 oc_1op_op_name(OpcodeNum) ->
     case OpcodeNum of
+	?CALL_1S        -> call_1s;
 	?DEC            -> dec;
 	?GET_CHILD      -> get_child;
 	?GET_PARENT     -> get_parent;
@@ -716,12 +743,14 @@ oc_var_op_name(OpcodeNum) ->
 	?BUFFER_MODE    -> buffer_mode;
 	?CALL           -> call;
 	?ERASE_WINDOW   -> erase_window;
+	?OUTPUT_STREAM  -> output_stream;
 	?PRINT_CHAR     -> print_char;
 	?PRINT_NUM      -> print_num;
 	?PUSH           -> push;
 	?PULL           -> pull;
 	?PUT_PROP       -> put_prop;
 	?RANDOM         -> random;
+	?READ_CHAR      -> read_char;
 	?SET_CURSOR     -> set_cursor;
 	?SET_TEXT_STYLE -> set_text_style;
 	?SET_WINDOW     -> set_window;
