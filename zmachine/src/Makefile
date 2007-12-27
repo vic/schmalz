@@ -2,9 +2,10 @@
 # 
 .SUFFIXES: .erl .beam .yrl
 
-CFLAGS = #-DDEBUG
-TESTFILE = ../testfiles/amfv.z4
+CFLAGS = -DDEBUG
+#TESTFILE = ../testfiles/amfv.z4
 #TESTFILE = ../testfiles/minizork.z3
+TESTFILE = ../testfiles/curses.z5
 
 .erl.beam:
 	erlc ${CFLAGS} -W $<

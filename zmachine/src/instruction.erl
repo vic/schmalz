@@ -228,16 +228,18 @@ add(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
     % the strange thing is that if we do not go explicitly, the
-    % value sent to the VM is plain wrong under OTP-5.5.5.
-    % This could be lying in the macro or the send mechanism.
-    % the workaround is to calculate first and send the value
+    % value sent to the VM is plain wrong under OTP 5.5.5 and 5.6.
+    % This could be caused by the macro expansion or the send mechanism.
+    % the workaround is to calculate first and send the calculated value.
     Sum = ?param(1) + ?param(2),
     ?store_var(?trunc16(Sum)).
 
 op_and(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
-    ?store_var(?param(1) band ?param(2)).
+    % see @add
+    Result = ?param(1) band ?param(2),
+    ?store_var(Result).
 
 buffer_mode(_, _) -> void. % not implemented
 
@@ -269,7 +271,6 @@ call_with_result(#instruction{address = Address, opcode_length = OpcodeLength,
 	    ?call_machine({call_routine, PackedAddress, Address + OpcodeLength,
 			   Arguments, StoreVar})
     end.
-    
 
 clear_attr(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
@@ -279,14 +280,15 @@ dec(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
-    SignedValue = util:unsigned_to_signed16(Value),
-    ?store_var2(VarNum, ?trunc16(SignedValue - 1)).
+    % see @add
+    Result = util:unsigned_to_signed16(Value) - 1,
+    ?store_var2(VarNum, ?trunc16(Result)).
 
 dec_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
-    DecValue = ?trunc16(util:unsigned_to_signed16(Value) - 1),
+    DecValue = util:unsigned_to_signed16(Value) - 1,
     ?call_machine({set_var, VarNum, DecValue}),
     ?branch_or_advance(DecValue < ?param(2)).
 
@@ -343,14 +345,15 @@ inc(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
-    SignedValue = util:unsigned_to_signed16(Value),
-    ?store_var2(VarNum, ?trunc16(SignedValue + 1)).
+    % see @add
+    Result = util:unsigned_to_signed16(Value) + 1,
+    ?store_var2(VarNum, ?trunc16(Result)).
 
 inc_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
-    IncValue = ?trunc16(util:unsigned_to_signed16(Value) + 1),
+    IncValue = util:unsigned_to_signed16(Value) + 1,
     ?call_machine({set_var, VarNum, IncValue}),
     ?branch_or_advance(IncValue > ?param(2)).
 
@@ -403,12 +406,16 @@ loadw(#instruction{operands = Operands, store_variable = StoreVar},
 mod(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
-    ?store_var(?trunc16(?param(1) rem ?param(2))).
+    % see @add
+    Remainder = ?param(1) rem ?param(2),
+    ?store_var(?trunc16(Remainder)).
 
 mul(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
-    ?store_var(?trunc16(?param(1) * ?param(2))).
+    % see @add
+    Product = ?param(1) * ?param(2),
+    ?store_var(?trunc16(Product)).
 
 new_line(_Instruction, MachinePid) ->
     ?call_machine({print_zscii, [?NEWLINE]}).
@@ -418,12 +425,16 @@ nop(_Instruction, _MachinePid) -> void.
 op_not(#instruction{operands = Operands, store_variable = StoreVar},
        MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
-    ?store_var(bnot ?param(1)).
+    % see @add
+    Result = bnot ?param(1),
+    ?store_var(Result).
 
 op_or(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
-    ?store_var(?param(1) bor ?param(2)).
+    % see @add
+    Result = ?param(1) bor ?param(2),
+    ?store_var(Result).
 
 output_stream(#instruction{operands = Operands}, MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
@@ -597,7 +608,9 @@ storew(#instruction{operands = Operands}, MachinePid) ->
 sub(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
-    ?store_var(?trunc16(?param(1) - ?param(2))).
+    % see @add
+    Diff = ?param(1) - ?param(2),
+    ?store_var(?trunc16(Diff)).
 
 test(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,

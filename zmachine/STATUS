@@ -1,6 +1,8 @@
 This is the Z-Machine component of Schmalz, the Erlang Interactive
 Fiction system.
-V3 support is almost complete.
+- V3 support is almost complete.
+- V4 support is almost complete.
+- V5 support has been started
 
 V5, V8 Status:
 --------------
