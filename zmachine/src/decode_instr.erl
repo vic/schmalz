@@ -25,7 +25,7 @@
 -module(decode_instr).
 -vsn('1.0').
 -export([get_instruction/1]).
--include("include/opcodes.hrl").
+-include("include/zmachine.hrl").
 
 -define(EXTENDED,           16#be).
 -define(MASK_VAR,           2#11000000).

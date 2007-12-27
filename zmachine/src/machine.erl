@@ -31,8 +31,9 @@
 %%%-----------------------------------------------------------------------
 -module(machine).
 -export([create/1, rpc/2, print/1, print_locals/1, dump_input_buffer/1]).
+-include("include/zmachine.hrl").
 -record(machine_state, {memory, value_stack, call_stack, pc, streams,
-			screen, status}).
+			stream_objs, status}).
 -record(routine, {start_address, return_address, invocation_sp, local_vars,
 		  return_variable}).
 -define(STACK, 0).
@@ -43,12 +44,14 @@
 
 % creates a new MachineState object from the specified Memory object
 create(Memory) ->
-    MachineState = #machine_state {memory = Memory, value_stack = [],
-				   call_stack = [],
-				   pc = memory:initial_pc(Memory),
-				   streams = streams:create(),
-				   screen = screen:create(80),
-				   status = run},
+    MachineState = #machine_state{memory = Memory, value_stack = [],
+				  call_stack = [],
+				  pc = memory:initial_pc(Memory),
+				  streams = streams:create(),
+				  stream_objs = #stream_objs{
+				    screen = screen:create(80),
+				    memory = []},
+				  status = run},
     spawn(fun() -> listen(MachineState) end).
 
 rpc(MachinePid, Message) ->
@@ -201,6 +204,15 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    ack(From, objects:next_property_num(Memory, Object, Property)),
 	    listen(MachineState0);
 	% I/O
+	{From, {output_stream, StreamNum}} ->
+	    MachineState1 = output_stream(MachineState0, StreamNum),
+	    ack(From, ok),
+	    listen(MachineState1);
+	{From, {output_stream, StreamNum, TableAddress}} ->
+	    MachineState1 = output_stream(MachineState0, StreamNum,
+					  TableAddress),
+	    ack(From, ok),
+	    listen(MachineState1);
 	{From, {send_input, InputString0}} ->
 	    InputString1 = string:to_lower(string:strip(InputString0)),
 	    MachineState1 = append_input(MachineState0, InputString1),
@@ -455,57 +467,126 @@ store_tokens(Memory0, Address, [{Pos, WordAddress, String} | Tokens]) ->
 %%% I/O
 %%%-----------------------------------------------------------------------
 
-print_zscii(#machine_state{streams = Streams, screen = Screen} = MachineState,
-	    ZsciiString) ->
-    MachineState#machine_state{
-      screen = streams:print_zscii(Streams, Screen, ZsciiString)}.
+print_zscii(#machine_state{streams = Streams0, stream_objs = StreamObjs0}
+	    = VmState0, ZsciiString) ->
+    VmState0#machine_state{stream_objs =
+			   streams:print_zscii(Streams0, StreamObjs0,
+					       ZsciiString)}.
 
-get_screen(#machine_state{screen = Screen0} = MachineState) ->
-    {ScreenBuffer, Screen1} = screen:get_screen(Screen0),
-    {ScreenBuffer, MachineState#machine_state{screen = Screen1}}.
+get_screen(#machine_state{stream_objs = #stream_objs{screen = Screen0}}
+	   = VmState0) ->
+    Version = memory:version(VmState0#machine_state.memory),
+    if
+	Version =:= 3 ->
+	    {ScreenBuffer, Screen1} = screen:get_screen3(Screen0);
+	true          ->
+	    {ScreenBuffer, Screen1} = screen:get_screen(Screen0)
+    end,
+    {ScreenBuffer, VmState0#machine_state{
+		     stream_objs = #stream_objs{screen = Screen1}}}.
 
-update_status_line(#machine_state{memory = Memory, screen = Screen}
-		  = MachineState) ->
-    MachineState#machine_state{screen = screen:set_status_line(
-					   Screen,
-					   objects:name(Memory,
-							get_global_var(Memory,
-								       1)),
-					   get_global_var(Memory, 2),
-					   get_global_var(Memory, 3))}.
+update_status_line(#machine_state{memory = Memory,
+				  stream_objs = #stream_objs{screen = Screen0}
+				 = StreamObjs0}
+		  = VmState0) ->
+    VmState0#machine_state{
+      stream_objs = StreamObjs0#stream_objs{
+	screen = screen:set_status_line(Screen0,
+					objects:name(Memory,
+						     get_global_var(Memory,
+								    1)),
+					get_global_var(Memory, 2),
+					get_global_var(Memory, 3))}}.
 
-append_input(#machine_state{streams = Streams} = MachineState,
-	     InputString) ->
-    MachineState#machine_state{streams = streams:append_input(Streams,
-							      InputString)}.
+append_input(#machine_state{streams = Streams} = VmState0, InputString) ->
+    VmState0#machine_state{streams = streams:append_input(Streams,
+							  InputString)}.
 
 read_char(VmState0, StoreVar) ->
     {[Char | _], VmState1} = read_input(VmState0),
     set_var(VmState1, StoreVar, Char band 16#ff).
 
-read_input(#machine_state{streams = Streams0} = MachineState) ->
+read_input(#machine_state{streams = Streams0} = VmState0) ->
     {InputString, Streams1} = streams:read_input(Streams0),
-    {InputString, MachineState#machine_state{streams = Streams1}}.
+    {InputString, VmState0#machine_state{streams = Streams1}}.
 
 dump_input_buffer(#machine_state{streams = Streams}) ->
     streams:dump_input(Streams).
 
-erase_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
-    VmState0#machine_state{screen = screen:erase_window(Screen, WindowNum)}.
+erase_window(#machine_state{stream_objs = #stream_objs{screen = Screen0}
+			    = StreamObjs0} = VmState0, WindowNum) ->
+    VmState0#machine_state{stream_objs =
+			   StreamObjs0#stream_objs{
+			     screen = screen:erase_window(Screen0, WindowNum)}}.
 
-split_window(#machine_state{screen = Screen} = VmState0, Lines) ->
-    VmState0#machine_state{screen = screen:split_window(Screen, Lines)}.
+split_window(#machine_state{stream_objs = #stream_objs{screen = Screen0}
+			    = StreamObjs0} = VmState0, Lines) ->
+    VmState0#machine_state{stream_objs =
+			   StreamObjs0#stream_objs{
+			     screen = screen:split_window(Screen0, Lines)}}.
 
-set_cursor(#machine_state{screen = Screen} = VmState0, Line, Column) ->
-    VmState0#machine_state{screen = screen:set_cursor(Screen, Line, Column)}.
+set_cursor(#machine_state{stream_objs =
+			  #stream_objs{screen = Screen0} = StreamObjs0}
+	   = VmState0, Line, Column) ->
+    VmState0#machine_state{stream_objs =
+			   StreamObjs0#stream_objs{
+			     screen = screen:set_cursor(Screen0, Line,
+							Column)}}.
 
-set_window(#machine_state{screen = Screen} = VmState0, WindowNum) ->
-    VmState0#machine_state{screen = screen:set_window(Screen, WindowNum)}.
+set_window(#machine_state{stream_objs =
+			  #stream_objs{screen = Screen0} = StreamObjs0}
+	   = VmState0, WindowNum) ->
+    VmState0#machine_state{stream_objs =
+			   StreamObjs0#stream_objs{
+			     screen = screen:set_window(Screen0, WindowNum)}}.
 
-set_text_style(#machine_state{screen = Screen} = VmState0, StyleFlags) ->
-    VmState0#machine_state{screen = screen:set_text_style(Screen,
-							  StyleFlags)}.
+set_text_style(#machine_state{stream_objs =
+			      #stream_objs{screen = Screen0} = StreamObjs0}
+			      = VmState0, StyleFlags) ->
+    VmState0#machine_state{stream_objs =
+			   StreamObjs0#stream_objs{
+			     screen = screen:set_text_style(Screen0,
+							    StyleFlags)}}.
 
+
+%%%-----------------------------------------------------------------------
+%%% Writing memory tables
+%%%-----------------------------------------------------------------------
+
+output_stream(#machine_state{memory = Memory0, streams = Streams,
+			     stream_objs = #stream_objs{
+			       memory = [MemStream|MemStreams]} = StreamObjs0}
+	      = VmState0, -3) ->
+    #mem_stream{table_address = TableAddress, num_chars = NumChars,
+		buffer = Buffer} = MemStream,
+    Memory1 = write_table(Memory0, TableAddress, NumChars, Buffer),
+    VmState0#machine_state{memory = Memory1,
+			   stream_objs = StreamObjs0#stream_objs{
+					  memory = MemStreams},
+			   streams = streams:output_stream(Streams, -3)};
+output_stream(#machine_state{streams = Streams} = VmState0, StreamNum) ->
+    VmState0#machine_state{streams = streams:output_stream(Streams, StreamNum)}.
+
+output_stream(#machine_state{streams = Streams,
+			     stream_objs = #stream_objs{memory = MemStreams}
+			     = StreamObjs0} = VmState0,
+	      3, TableAddress) ->
+    MemStream = streams:create_mem_stream(TableAddress),
+    VmState0#machine_state{streams = streams:output_stream(Streams, 3),
+			   stream_objs = StreamObjs0#stream_objs{
+					   memory = [MemStream | MemStreams]}}.
+
+write_table(Memory0, TableAddress, NumChars, Buffer) ->
+    io:format("Writing table, buffer: ~p, Num chars: ~w~n",
+	     [Buffer, NumChars]),
+    write_table_data(memory:set_word16(Memory0, TableAddress, NumChars),
+		     TableAddress + 2, Buffer).
+
+write_table_data(Memory0, _, []) -> Memory0;
+write_table_data(Memory0, Address, [Byte | Bytes]) ->
+    write_table_data(memory:set_byte(Memory0, Address, Byte band 16#ff),
+		     Address + 1, Bytes).
+    
 %%%-----------------------------------------------------------------------
 %%% State printing
 %%%-----------------------------------------------------------------------

@@ -14,7 +14,7 @@
 %%% along with Schmalz.  If not, see <http://www.gnu.org/licenses/>.
 
 %%%-----------------------------------------------------------------------
-%%% Header file opcodes.hrl
+%%% Header file zmachine.hrl
 %%%-----------------------------------------------------------------------
 %%% This module contains the symbolic constants for the opcodes
 %%% specified in the Z-machine specification
@@ -121,3 +121,26 @@
 -define(PRINT_TABLE,    16#1e).
 -define(CHECK_ARG_COUNT,16#1f).
 
+% ZSCII constants
+-define(NEWLINE,        13).
+-define(SPACE,          32).
+-define(EXCLAIMATION,   33).
+-define(DOUBLE_QUOTE,   34).
+-define(HASH_MARK,      35).
+-define(DOLLAR,         36).
+-define(SINGLE_QUOTE,   39).
+-define(LEFT_PAREN,     40).
+-define(RIGHT_PAREN,    41).
+-define(COMMA,          44).
+-define(DASH,           45).
+-define(DOT,            46).
+-define(SLASH,          47).
+-define(COLON,          58).
+-define(QUESTION_MARK,  63).
+-define(BACKSLASH,      92).
+-define(UNDERSCORE,     95).
+
+% Records
+% A record that holds the supported stream objects
+-record(stream_objs, {screen, memory}).
+-record(mem_stream, {table_address, num_chars, buffer}).

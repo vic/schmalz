@@ -31,7 +31,8 @@
 -module(screen).
 -export([create/1, status_line/1, set_status_line/4, bottom_window/1,
 	 print_zscii/2, split_window/2, erase_window/2,
-	 set_cursor/3, set_window/2, set_text_style/2, get_screen/1]).
+	 set_cursor/3, set_window/2, set_text_style/2, get_screen3/1,
+	 get_screen/1]).
 
 -define(STYLE_ROMAN,         0).
 -define(STYLE_REVERSE_VIDEO, 1).
@@ -101,7 +102,7 @@ style_string(_)                    -> "{STYLE_ROMAN->}".
 generate_empty_rows(NumRows, NumColumns) ->
     lists:duplicate(NumRows, lists:duplicate(NumColumns, {[], " "})).
 
-get_screen(Screen) ->
+get_screen3(Screen) ->
     {ObjectName, Value1, Value2} = Screen#screen.status_line,
     WindowBottom = Screen#screen.window_bottom,
     {ok, WindowBottomStr, _} = regexp:gsub(WindowBottom, "\r", "\n"),
@@ -109,3 +110,9 @@ get_screen(Screen) ->
 		   [ObjectName, Value1, Value2, WindowBottomStr]),
     Screen#screen{window_bottom = []}}.
 
+get_screen(Screen) ->
+    WindowBottom = Screen#screen.window_bottom,
+    {ok, WindowBottomStr, _} = regexp:gsub(WindowBottom, "\r", "\n"),
+    {io_lib:format("~s",
+		   [WindowBottomStr]),
+    Screen#screen{window_bottom = []}}.

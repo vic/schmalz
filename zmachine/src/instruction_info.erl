@@ -25,7 +25,7 @@
 %%%-----------------------------------------------------------------------
 -module(instruction_info).
 -export([is_branch/3, is_store/3, is_call/3, is_return/3, is_jump/3]).
--include("include/opcodes.hrl").
+-include("include/zmachine.hrl").
 
 % determines whether the specified opcode is a branch opcode
 is_branch(oc_0op, OpcodeNum, _Version)

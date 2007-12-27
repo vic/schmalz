@@ -38,7 +38,7 @@
 -module(encoding).
 -vsn('1.0').
 -export([decode_address/3, num_zencoded_bytes/2, is_space/1, ord/1]).
--include("include/zscii.hrl").
+-include("include/zmachine.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Macros

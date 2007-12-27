@@ -46,8 +46,7 @@
 -module(instruction).
 -export([create/7, create_branch_info/4, size_branch_offset/1,
 	 execute/2, print_instr/2]).
--include("include/opcodes.hrl").
--include("include/zscii.hrl").
+-include("include/zmachine.hrl").
 
 %% Useful Macros
 -define(FALSE, 0).
@@ -200,6 +199,7 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	?BUFFER_MODE      -> fun buffer_mode/2;
 	?CALL             -> fun call/2;
 	?ERASE_WINDOW     -> fun erase_window/2;
+	?OUTPUT_STREAM    -> fun output_stream/2;
 	?PRINT_NUM        -> fun print_num/2;
 	?PRINT_CHAR       -> fun print_char/2;
 	?PUSH             -> fun push/2;
@@ -410,6 +410,13 @@ op_or(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?param(1) bor ?param(2)).
+
+output_stream(#instruction{operands = Operands}, MachinePid) ->
+    ?USE_SIGNED_PARAMETERS,
+    case length(Operands) of
+	1 -> ?call_machine({output_stream, ?param(1)});
+	2 -> ?call_machine({output_stream, ?param(1), ?param(2)})
+    end.
 
 piracy(Instruction, MachinePid) -> ?branch_or_advance(true).
 
@@ -751,6 +758,7 @@ oc_var_op_name(OpcodeNum) ->
 	?PUT_PROP       -> put_prop;
 	?RANDOM         -> random;
 	?READ_CHAR      -> read_char;
+	?SCAN_TABLE     -> scan_table;
 	?SET_CURSOR     -> set_cursor;
 	?SET_TEXT_STYLE -> set_text_style;
 	?SET_WINDOW     -> set_window;
