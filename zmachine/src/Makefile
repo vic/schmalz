@@ -2,7 +2,7 @@
 # 
 .SUFFIXES: .erl .beam .yrl
 
-CFLAGS = -DDEBUG
+CFLAGS = #-DDEBUG
 TESTFILE = ../testfiles/amfv.z4
 #TESTFILE = ../testfiles/minizork.z3
 

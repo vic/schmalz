@@ -227,7 +227,12 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 add(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
-    ?store_var(?trunc16(?param(1) + ?param(2))).
+    % the strange thing is that if we do not go explicitly, the
+    % value sent to the VM is plain wrong under OTP-5.5.5.
+    % This could be lying in the macro or the send mechanism.
+    % the workaround is to calculate first and send the value
+    Sum = ?param(1) + ?param(2),
+    ?store_var(?trunc16(Sum)).
 
 op_and(#instruction{operands = Operands, store_variable = StoreVar},
     MachinePid) ->
@@ -250,7 +255,7 @@ call_2s(#instruction{operands = Operands} = Instruction, MachinePid) ->
 
 call_vs2(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [Routine | Params] = params(MachinePid, Operands),
-    io:format("@call_vs, routine: ~w, Params: ~p~n", [Routine, Params]),
+    %io:format("@call_vs, routine: ~w, Params: ~p~n", [Routine, Params]),
     call_with_result(Instruction, Routine, Params, MachinePid).
 
 call_with_result(#instruction{address = Address, opcode_length = OpcodeLength,
@@ -288,7 +293,8 @@ dec_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
 op_div(#instruction{operands = Operands, store_variable = StoreVar},
        MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
-    ?store_var(?trunc16(?param(1) div ?param(2))).
+    Quotient = ?param(1) div ?param(2),
+    ?store_var(?trunc16(Quotient)).
 
 erase_window(#instruction{operands = Operands}, MachinePid) ->
     ?USE_SIGNED_PARAMETERS,
@@ -354,6 +360,7 @@ insert_obj(#instruction{operands = Operands}, MachinePid) ->
 
 je(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [First | CompareList] = signed_params(MachinePid, Operands),
+    %io:format("@JE, First: ~w, CompareList: ~p~n", [First, CompareList]),
     ?branch_or_advance(
        length(lists:filter(fun(X) -> X =:= First end, CompareList)) > 0).
 
@@ -529,7 +536,8 @@ scan_table(#instruction{operands = Operands, store_variable = StoreVar}
 	    Addr = ?call_machine({scan_table, ?param(1), ?param(2), ?param(3),
 				 ?param(4)})
     end,
-    io:format("SCAN_TABLE, X: ~w, Addr: ~w~n", [?param(1),Addr]),
+    %io:format("SCAN_TABLE, X: ~w, TABLE: ~w, LEN: ~w Addr: ~w~n",
+	%      [?param(1), ?param(2), ?param(3), Addr]),
     ?store_var(Addr),
     ?branch_or_advance(Addr > 0).
 

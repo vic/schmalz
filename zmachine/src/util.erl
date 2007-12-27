@@ -29,7 +29,7 @@
 
 -module(util).
 -export([unsigned_to_signed16/1, signed_to_unsigned16/1,
-	 unsigned_to_signed14/1]).
+	 unsigned_to_signed14/1, list_replace/3]).
 
 -define(WORD14_UNSIGNED_MAX, 16383).
 -define(WORD14_SIGNED_MAX, 8191).
@@ -49,3 +49,7 @@ signed_to_unsigned16(WordValue) when WordValue < 0 ->
 	?WORD16_SIGNED_MAX - WordValue;
 signed_to_unsigned16(WordValue) -> WordValue.
 
+% Zero-based,
+list_replace(List, Index, ReplaceElem) ->
+    lists:append([lists:sublist(List, Index - 1), [ReplaceElem],
+		  lists:sublist(List, Index + 1, length(List) - 1)]).

@@ -77,12 +77,8 @@ print_zscii_top(#text_grid{cursorx = CursorX} = TopWindow0, [Char | String]) ->
 print_zscii_char_top(#text_grid{buffer = Buffer, style = Style,
 				cursory = CursorY, cursorx = CursorX}, Char) ->
     Row0 = lists:nth(CursorY, Buffer),
-    Row1 = list_replace(Row0, CursorX, 1, {style_string(Style), Char}),
-    list_replace(Buffer, CursorY, 1, Row1).
-
-list_replace([_|List], Index, Index, ReplaceElem) -> [ReplaceElem|List];
-list_replace([Elem|List], Index, CurrentIndex, ReplaceElem) ->
-    [Elem | list_replace(List, Index, CurrentIndex + 1, ReplaceElem)].
+    Row1 = util:list_replace(Row0, CursorX, {style_string(Style), Char}),
+    util:list_replace(Buffer, CursorY, Row1).
 
 split_window(#screen{window_top = #text_grid{num_cols = NumColumns,
 					     buffer = Rows} = TopWindow}
@@ -122,7 +118,6 @@ style_string(?STYLE_FIXED)         -> "{STYLE_FIXED->}";
 style_string(_)                    -> "{STYLE_ROMAN->}".
      
 generate_empty_rows(NumRows, NumColumns) ->
-    io:format("Generate new rows: ~w ~w~n", [NumRows, NumColumns]),
     lists:duplicate(NumRows, lists:duplicate(NumColumns, {"{STYLE_ROMAN->}",
 							  ?SPACE})).
 

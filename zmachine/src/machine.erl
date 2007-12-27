@@ -56,7 +56,6 @@ create(Memory0) ->
     Version = memory:version(Memory0),
     if
 	Version =:= 4 ->
-	    io:fwrite("V4 setup~n"),
 	    Flags1 = memory:get_byte(Memory0, 16#01),
 	    Memory1 = memory:set_byte(Memory0, 16#20, 40),
 	    Memory2 = memory:set_byte(Memory1, 16#21, 80),
@@ -352,7 +351,7 @@ set_var(#machine_state{call_stack = CallStack} = MachineState, VarNum, Value)
       call_stack = stack_push(stack_pop(CallStack),
 			      routine_set_local(Routine,
 						VarNum - 1,
-						?trunc16(Value))) };
+						?trunc16(Value)))};
 set_var(#machine_state{memory = Memory} = MachineState, VarNum, Value) ->
     MachineState#machine_state{ memory =
 				memory:set_word16(Memory,
@@ -414,7 +413,7 @@ routine_get_local(#routine{local_vars = Locals}, Index) ->
 
 % sets the nth local variable to the specified value
 routine_set_local(#routine{local_vars = Locals} = Routine, Index, Value) ->
-    Routine#routine{ local_vars = set_local_list(Locals, Index, Value) }.
+    Routine#routine{local_vars = util:list_replace(Locals, Index + 1, Value)}.
 
 %%%-----------------------------------------------------------------------
 %%%  Routine Helpers
@@ -425,11 +424,6 @@ get_locals(_Memory, _Address, 0)       -> [];
 get_locals(Memory, Address, NumLocals) ->
     [ memory:get_word16(Memory, Address) | get_locals(Memory, Address + 2,
 						      NumLocals - 1) ].
-
-% replaces the nth value in the given list with the specified value
-set_local_list(Locals, Index, Value) ->
-    lists:append([lists:sublist(Locals, Index), [Value],
-		  lists:sublist(Locals, Index + 2, length(Locals) - 1)]).
 
 %%%-----------------------------------------------------------------------
 %%% Stack implementation
@@ -598,8 +592,6 @@ output_stream(#machine_state{streams = Streams,
 					   memory = [MemStream | MemStreams]}}.
 
 write_table(Memory0, TableAddress, NumChars, Buffer) ->
-    io:format("Writing table, buffer: ~p, Num chars: ~w~n",
-	     [Buffer, NumChars]),
     write_table_data(memory:set_word16(Memory0, TableAddress, NumChars),
 		     TableAddress + 2, Buffer).
 
@@ -613,7 +605,7 @@ scan_table(Memory, X, Address, Len) ->
     Word = memory:get_word16(Memory, Address),
     if
 	Word =:= X -> Address;
-	true       -> scan_table(Memory, X, Address + 2, Len - 2)
+	true       -> scan_table(Memory, X, Address + 2, Len - 1)
     end.
 
 scan_table(_Memory0, _X, _Table, _Len, _Form) ->

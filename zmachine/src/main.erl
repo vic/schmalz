@@ -51,7 +51,7 @@ main() ->
 % starts the Z-machine with the specified story file
 start(Filename) ->
     MachinePid = machine:create(memory:read_file(Filename)),
-    run(MachinePid, 1).
+    run(MachinePid, 0).
 
 run(MachinePid, Num) ->
     Status = machine:rpc(MachinePid, status),
