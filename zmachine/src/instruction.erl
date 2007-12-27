@@ -198,6 +198,7 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
     case OpcodeNum of
 	?BUFFER_MODE      -> fun buffer_mode/2;
 	?CALL             -> fun call/2;
+	?CALL_VS2         -> fun call_vs2/2;
 	?ERASE_WINDOW     -> fun erase_window/2;
 	?OUTPUT_STREAM    -> fun output_stream/2;
 	?PRINT_NUM        -> fun print_num/2;
@@ -207,6 +208,7 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	?PUT_PROP         -> fun put_prop/2;
 	?RANDOM           -> fun random/2;
 	?READ_CHAR        -> fun read_char/2;
+	?SCAN_TABLE       -> fun scan_table/2;
 	?SET_CURSOR       -> fun set_cursor/2;
 	?SET_TEXT_STYLE   -> fun set_text_style/2;
 	?SET_WINDOW       -> fun set_window/2;
@@ -245,6 +247,11 @@ call_1s(#instruction{operands = Operands} = Instruction, MachinePid) ->
 call_2s(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     call_with_result(Instruction, ?param(1), [?param(2)], MachinePid).
+
+call_vs2(#instruction{operands = Operands} = Instruction, MachinePid) ->
+    [Routine | Params] = params(MachinePid, Operands),
+    io:format("@call_vs, routine: ~w, Params: ~p~n", [Routine, Params]),
+    call_with_result(Instruction, Routine, Params, MachinePid).
 
 call_with_result(#instruction{address = Address, opcode_length = OpcodeLength,
 			      store_variable = StoreVar},
@@ -511,6 +518,21 @@ rfalse(_Instruction, MachinePid) ->
 rtrue(_Instruction, MachinePid) ->
     ?return_from_routine(?TRUE).
 
+scan_table(#instruction{operands = Operands, store_variable = StoreVar}
+	   = Instruction, MachinePid) ->
+    ?USE_UNSIGNED_PARAMETERS,
+    NumParams = length(Operands),
+    if
+	NumParams =:= 3 ->
+	    Addr = ?call_machine({scan_table, ?param(1), ?param(2), ?param(3)});
+	true            ->
+	    Addr = ?call_machine({scan_table, ?param(1), ?param(2), ?param(3),
+				 ?param(4)})
+    end,
+    io:format("SCAN_TABLE, X: ~w, Addr: ~w~n", [?param(1),Addr]),
+    ?store_var(Addr),
+    ?branch_or_advance(Addr > 0).
+
 set_attr(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_attribute, ?param(1), ?param(2)}).
@@ -749,6 +771,7 @@ oc_var_op_name(OpcodeNum) ->
     case OpcodeNum of
 	?BUFFER_MODE    -> buffer_mode;
 	?CALL           -> call;
+	?CALL_VS2       -> call_vs2;
 	?ERASE_WINDOW   -> erase_window;
 	?OUTPUT_STREAM  -> output_stream;
 	?PRINT_CHAR     -> print_char;

@@ -17,6 +17,7 @@ V4 Status:
 - dictionary works
 - unpack_address
 - object table works
+- memory streams
 
 2OP:
   - call_2s
@@ -31,6 +32,9 @@ VAR:
   - @erase_window
   - @set_text_style
   - @read_char
+  - @output_stream
+  - @scan_table
+  - @call_vs2
 
 TODO:
 -----
@@ -41,11 +45,8 @@ TODO:
 
 VAR:
 - @sread (has timed input)
-- @call_vs2
 - @erase_line
 - @get_cursor
-- @scan_table
-- @output_stream
 
 V3 Status:
 ----------

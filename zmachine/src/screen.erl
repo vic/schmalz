@@ -33,6 +33,7 @@
 	 print_zscii/2, split_window/2, erase_window/2,
 	 set_cursor/3, set_window/2, set_text_style/2, get_screen3/1,
 	 get_screen/1]).
+-include("include/zmachine.hrl").
 
 -define(STYLE_ROMAN,         0).
 -define(STYLE_REVERSE_VIDEO, 1).
@@ -59,8 +60,29 @@ set_status_line(Screen, ObjectName, Value1, Value2) ->
 bottom_window(#screen{window_bottom = WindowBottom} = Screen) ->
   {WindowBottom, Screen#screen{window_bottom = []}}.
 
-print_zscii(#screen{window_bottom = Window} = Screen, ZsciiString) ->
-    Screen#screen{window_bottom = Window ++ ZsciiString}.
+print_zscii(#screen{current = bottom, window_bottom = Window} = Screen,
+	    ZsciiString) ->
+    Screen#screen{window_bottom = Window ++ ZsciiString};
+print_zscii(#screen{current = top, window_top = TopWindow} = Screen,
+	    ZsciiString) ->
+    Screen#screen{window_top = print_zscii_top(TopWindow, ZsciiString)}.
+
+print_zscii_top(TopWindow, []) -> TopWindow;
+print_zscii_top(#text_grid{cursorx = CursorX} = TopWindow0, [Char | String]) ->
+    print_zscii_top(TopWindow0#text_grid{
+		      buffer = print_zscii_char_top(TopWindow0, Char),
+		      cursorx = CursorX + 1},
+		    String).
+
+print_zscii_char_top(#text_grid{buffer = Buffer, style = Style,
+				cursory = CursorY, cursorx = CursorX}, Char) ->
+    Row0 = lists:nth(CursorY, Buffer),
+    Row1 = list_replace(Row0, CursorX, 1, {style_string(Style), Char}),
+    list_replace(Buffer, CursorY, 1, Row1).
+
+list_replace([_|List], Index, Index, ReplaceElem) -> [ReplaceElem|List];
+list_replace([Elem|List], Index, CurrentIndex, ReplaceElem) ->
+    [Elem | list_replace(List, Index, CurrentIndex + 1, ReplaceElem)].
 
 split_window(#screen{window_top = #text_grid{num_cols = NumColumns,
 					     buffer = Rows} = TopWindow}
@@ -100,7 +122,9 @@ style_string(?STYLE_FIXED)         -> "{STYLE_FIXED->}";
 style_string(_)                    -> "{STYLE_ROMAN->}".
      
 generate_empty_rows(NumRows, NumColumns) ->
-    lists:duplicate(NumRows, lists:duplicate(NumColumns, {[], " "})).
+    io:format("Generate new rows: ~w ~w~n", [NumRows, NumColumns]),
+    lists:duplicate(NumRows, lists:duplicate(NumColumns, {"{STYLE_ROMAN->}",
+							  ?SPACE})).
 
 get_screen3(Screen) ->
     {ObjectName, Value1, Value2} = Screen#screen.status_line,
@@ -113,6 +137,14 @@ get_screen3(Screen) ->
 get_screen(Screen) ->
     WindowBottom = Screen#screen.window_bottom,
     {ok, WindowBottomStr, _} = regexp:gsub(WindowBottom, "\r", "\n"),
-    {io_lib:format("~s",
-		   [WindowBottomStr]),
+    {io_lib:format("-------TOP-----------~n~s~n-------BOTTOM--------~n~s",
+		   [get_top_window(Screen#screen.window_top), WindowBottomStr]),
     Screen#screen{window_bottom = []}}.
+
+get_top_window(#text_grid{buffer = Rows}) -> get_top_window(Rows);
+get_top_window([]) -> "";
+get_top_window([Row|Rows]) -> get_row(Row) ++ get_top_window(Rows).
+
+get_row([]) -> "\n";
+get_row([{_, Char} | Row]) -> [Char] ++ get_row(Row).
+    

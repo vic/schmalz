@@ -127,9 +127,19 @@ decode_variable(MachinePid, Address, Version) ->
     OpcodeByte = ?get_byte(Address),
     OperandCount = variable_operand_count(OpcodeByte),
     OpcodeNum = ?variable_opcode_num(OpcodeByte),
-    OperandTypes = extract_operand_types(?get_byte(Address + 1)),
-    Operands = extract_operands(MachinePid, Address + 2, OperandTypes),
-    StoreVarAddress = Address + 2 + num_operand_bytes(OperandTypes),
+    if
+	OpcodeNum =:= ?CALL_VS2 ->
+	    OperandTypes = extract_operand_types(?get_byte(Address + 1)) ++
+		extract_operand_types(?get_byte(Address + 2)),
+	    OpTypesOffset = 3;
+	true                    ->
+	    OperandTypes = extract_operand_types(?get_byte(Address + 1)),
+	    OpTypesOffset = 2
+    end,
+	    
+    Operands = extract_operands(MachinePid, Address + OpTypesOffset,
+				OperandTypes),
+    StoreVarAddress = Address + OpTypesOffset + num_operand_bytes(OperandTypes),
     StoreVar = storevar(MachinePid, StoreVarAddress,
 			instruction_info:is_store(OperandCount, OpcodeNum,
 						  Version)),
@@ -138,7 +148,7 @@ decode_variable(MachinePid, Address, Version) ->
 			     instruction_info:is_branch(OperandCount,
 							OpcodeNum,
 							undef)),
-    OpcodeLength = ?LEN_OPCODE + 1 + num_operand_bytes(OperandTypes) +
+    OpcodeLength = OpTypesOffset + num_operand_bytes(OperandTypes) +
 	storevar_len(StoreVar) + instruction:size_branch_offset(BranchInfo),
     instruction:create(OperandCount, OpcodeNum, 
 		       lists:zip(OperandTypes, Operands),

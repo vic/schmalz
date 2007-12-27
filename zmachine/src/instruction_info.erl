@@ -37,7 +37,7 @@ is_branch(oc_2op, OpcodeNum, _Version)
   when OpcodeNum =:= ?JE; OpcodeNum =:= ?JL; OpcodeNum =:= ?JG;
        OpcodeNum =:= ?DEC_CHK; OpcodeNum =:= ?INC_CHK; OpcodeNum =:= ?JIN;
        OpcodeNum =:= ?TEST; OpcodeNum =:= ?TEST_ATTR             -> true;
-is_branch(variable, OpcodeNum, _Version)
+is_branch(oc_var, OpcodeNum, _Version)
   when OpcodeNum =:= ?SCAN_TABLE; OpcodeNum =:= ?CHECK_ARG_COUNT -> true;
 is_branch(_OpCount, _OpcodeNum, _Version)                        -> false.
 
@@ -63,7 +63,8 @@ is_store(oc_var, OpcodeNum, _Version)
 is_store(_OpCount, _OpcodeNum, _Version) -> false.
 
 % determines whether the specified opcode is a call
-is_call(oc_var, OpcodeNum, _Version) when OpcodeNum =:= ?CALL    -> true;
+is_call(oc_var, OpcodeNum, _Version)
+  when OpcodeNum =:= ?CALL; OpcodeNum =:= ?CALL_VS2              -> true;
 is_call(oc_2op, OpcodeNum, _Version) when OpcodeNum =:= ?CALL_2S -> true;
 is_call(oc_1op, ?CALL_1S, 4)                                     -> true;
 is_call(_OpCount, _OpcodeNum, _Version)                          -> false.

@@ -43,16 +43,29 @@
 -define(trunc16(Value), Value band 2#1111111111111111).
 
 % creates a new MachineState object from the specified Memory object
-create(Memory) ->
-    MachineState = #machine_state{memory = Memory, value_stack = [],
-				  call_stack = [],
-				  pc = memory:initial_pc(Memory),
-				  streams = streams:create(),
-				  stream_objs = #stream_objs{
-				    screen = screen:create(80),
-				    memory = []},
-				  status = run},
-    spawn(fun() -> listen(MachineState) end).
+create(Memory0) ->
+    VmState0 = #machine_state{memory = Memory0, value_stack = [],
+			      call_stack = [],
+			      pc = memory:initial_pc(Memory0),
+			      streams = streams:create(),
+			      stream_objs = #stream_objs{
+				screen = screen:create(80),
+				memory = []},
+			      status = run},
+    %% do file header stuff here for now
+    Version = memory:version(Memory0),
+    if
+	Version =:= 4 ->
+	    io:fwrite("V4 setup~n"),
+	    Flags1 = memory:get_byte(Memory0, 16#01),
+	    Memory1 = memory:set_byte(Memory0, 16#20, 40),
+	    Memory2 = memory:set_byte(Memory1, 16#21, 80),
+	    Memory3 = memory:set_byte(Memory2, 16#01, Flags1 bor 2#00111100),
+	    VmState1 = VmState0#machine_state{memory = Memory3};
+	true ->
+	    VmState1 = VmState0
+    end,    
+    spawn(fun() -> listen(VmState1) end).
 
 rpc(MachinePid, Message) ->
     MachinePid ! {self(), Message},
@@ -247,6 +260,14 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 	    MachineState1 = set_window(MachineState0, WindowNum),
 	    ack(From, ok),
 	    listen(MachineState1);
+	% Other
+	{From, {scan_table, X, Table, Len}} ->
+	    ack(From, scan_table(Memory, X, Table, Len)),
+	    listen(MachineState0);
+	{From, {scan_table, X, Table, Len, Form}} ->
+	    ack(From, scan_table(Memory, X, Table, Len, Form)),
+	    listen(MachineState0);
+	% Default
 	{From,Other} ->
 	    io:format("Error in VM request: ~p~n", [Other]),
 	    ack(From, {error, Other}),
@@ -586,7 +607,18 @@ write_table_data(Memory0, _, []) -> Memory0;
 write_table_data(Memory0, Address, [Byte | Bytes]) ->
     write_table_data(memory:set_byte(Memory0, Address, Byte band 16#ff),
 		     Address + 1, Bytes).
-    
+
+scan_table(_, _, _, 0) -> 0;
+scan_table(Memory, X, Address, Len) ->
+    Word = memory:get_word16(Memory, Address),
+    if
+	Word =:= X -> Address;
+	true       -> scan_table(Memory, X, Address + 2, Len - 2)
+    end.
+
+scan_table(_Memory0, _X, _Table, _Len, _Form) ->
+    undef.
+
 %%%-----------------------------------------------------------------------
 %%% State printing
 %%%-----------------------------------------------------------------------
