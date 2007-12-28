@@ -42,6 +42,7 @@ is_branch(oc_var, OpcodeNum, _Version)
 is_branch(_OpCount, _OpcodeNum, _Version)                        -> false.
 
 % determines whether the specified opcode is a store opcode
+is_store(oc_1op, ?CALL_1N, Version) when Version >= 5 -> false;
 is_store(oc_1op, OpcodeNum, _Version)
   when OpcodeNum =:= ?GET_PARENT; OpcodeNum =:= ?GET_CHILD;
        OpcodeNum =:= ?GET_SIBLING; OpcodeNum =:= ?GET_PROP_LEN;
@@ -66,7 +67,8 @@ is_store(_OpCount, _OpcodeNum, _Version) -> false.
 is_call(oc_var, OpcodeNum, _Version)
   when OpcodeNum =:= ?CALL; OpcodeNum =:= ?CALL_VS2              -> true;
 is_call(oc_2op, OpcodeNum, _Version) when OpcodeNum =:= ?CALL_2S -> true;
-is_call(oc_1op, ?CALL_1S, 4)                                     -> true;
+is_call(oc_1op, ?CALL_1S, Version) when Version >= 4             -> true;
+is_call(oc_1op, ?CALL_1N, Version) when Version >= 5             -> true;
 is_call(_OpCount, _OpcodeNum, _Version)                          -> false.
 
 is_return(oc_1op, ?RET, _Version)                           -> true;

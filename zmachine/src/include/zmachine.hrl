@@ -68,6 +68,7 @@
 -define(PRINT_PADDR,    16#0d).
 -define(LOAD,           16#0e).
 -define(NOT,            16#0f).
+-define(CALL_1N,        16#0f).
 
 % 0OP opcodes
 -define(RTRUE,	        16#00).

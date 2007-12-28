@@ -27,7 +27,7 @@
 
 -ifdef(DEBUG).
 -define(print_instruction(Instruction),
-	instruction:print_instr(Instruction, Num)).
+	instruction:print_instr(MachinePid, Instruction, Num)).
 -else.
 -define(print_instruction(Instruction), void).
 -endif.
@@ -51,14 +51,15 @@ main() ->
 % starts the Z-machine with the specified story file
 start(Filename) ->
     MachinePid = machine:create(memory:read_file(Filename)),
-    run(MachinePid, 0).
+    Version = machine:rpc(MachinePid, version),
+    run(MachinePid, Version, 0).
 
-run(MachinePid, Num) ->
+run(MachinePid, Version, Num) ->
     Status = machine:rpc(MachinePid, status),
     if
         Status =:= halt -> halt;
 	Status =:= sread; Status =:= read_char ->
-            machine:rpc(MachinePid, update_status_line),
+	    update_status_line(MachinePid, Version),
 	    % flush the output buffer
             Output = machine:rpc(MachinePid, get_screen),
             io:fwrite(Output),	    
@@ -66,14 +67,19 @@ run(MachinePid, Num) ->
 	    Input2 = string:substr(Input, 1, string:len(Input) - 1),
 	    machine:rpc(MachinePid, {send_input, Input2}),
 	    % decode and execute again
-	    decode_and_execute(MachinePid, Num);
+	    decode_and_execute(MachinePid, Version, Num);
         true ->
-	    decode_and_execute(MachinePid, Num + 1)
+	    decode_and_execute(MachinePid, Version, Num + 1)
     end.
 
-decode_and_execute(MachinePid, Num) ->
+update_status_line(MachinePid, Version) when Version =< 3 ->
+    machine:rpc(MachinePid, update_status_line);
+update_status_line(_, _) -> undef.
+    
+
+decode_and_execute(MachinePid, Version, Num) ->
     Instruction = decode_instr:get_instruction(MachinePid),
     ?print_instruction(Instruction),
     instruction:execute(Instruction, MachinePid),
-    run(MachinePid, Num).
-    
+    run(MachinePid, Version, Num).
+ 

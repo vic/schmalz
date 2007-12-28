@@ -45,7 +45,7 @@
 
 -module(instruction).
 -export([create/7, create_branch_info/4, size_branch_offset/1,
-	 execute/2, print_instr/2]).
+	 execute/2, print_instr/3]).
 -include("include/zmachine.hrl").
 
 %% Useful Macros
@@ -106,13 +106,13 @@ create(OperandCount, OpcodeNum, Operands, StoreVariable,
 		 address = Address, opcode_length = OpcodeLength}.
 
 execute(Instruction, MachinePid) ->
-    Execute = get_operation(Instruction, MachinePid),
+    Version = ?call_machine(version),
+    Execute = get_operation(Instruction, Version),
     Execute(Instruction, MachinePid),
-    update_pc(Instruction, MachinePid).
+    update_pc(Instruction, MachinePid, Version).
 
 update_pc(#instruction{operand_count = OperandCount, opcode_num = OpcodeNum,
-		       opcode_length = OpcodeLength}, MachinePid) ->
-    Version  = ?call_machine(version),
+		       opcode_length = OpcodeLength}, MachinePid, Version) ->
     IsCall   = instruction_info:is_call(OperandCount, OpcodeNum, Version),
     IsBranch = instruction_info:is_branch(OperandCount, OpcodeNum, Version),
     IsReturn = instruction_info:is_return(OperandCount, OpcodeNum, Version),
@@ -126,7 +126,7 @@ update_pc(#instruction{operand_count = OperandCount, opcode_num = OpcodeNum,
     end.
   
 get_operation(#instruction{operand_count = oc_0op, opcode_num = OpcodeNum },
-	      _MachinePid) ->
+	      _Version) ->
     case OpcodeNum of
 	?NEW_LINE         -> fun new_line/2;
 	?NOP              -> fun nop/2;
@@ -142,8 +142,10 @@ get_operation(#instruction{operand_count = oc_0op, opcode_num = OpcodeNum },
 	?VERIFY           -> fun verify/2;
 	_Default          -> fun op_halt/2
     end;
-get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum },
-	      _MachinePid) ->
+get_operation(#instruction{operand_count = oc_1op, opcode_num = ?CALL_1N},
+	      Version) when Version >= 5 -> fun call_1s/2;
+get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum},
+	      _Version) ->
     case OpcodeNum of
 	?CALL_1S          -> fun call_1s/2;
 	?DEC              -> fun dec/2;
@@ -164,7 +166,7 @@ get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum },
 	_Default          -> fun op_halt/2
     end;
 get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum },
-	      _MachinePid) ->
+	      _Version) ->
     case OpcodeNum of
 	?ADD              -> fun add/2;
 	?AND              -> fun op_and/2;
@@ -194,7 +196,7 @@ get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum },
 	_Default          -> fun op_halt/2
     end;
 get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
-	      _MachinePid) ->
+	      _Version) ->
     case OpcodeNum of
 	?BUFFER_MODE      -> fun buffer_mode/2;
 	?CALL             -> fun call/2;
@@ -247,6 +249,8 @@ call(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [ PackedAddress | Arguments] = params(MachinePid, Operands),
     call_with_result(Instruction, PackedAddress, Arguments, MachinePid).
 
+% call_1s is also call_1n, because there is no store specified, it will
+% be thrown away
 call_1s(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     call_with_result(Instruction, ?param(1), [], MachinePid).
@@ -685,14 +689,16 @@ signed_operand_value(MachinePid, Operand) ->
 %%% Printing Instructions debugging support
 %%%-----------------------------------------------------------------------
 
-print_instr(#instruction{operand_count = OperandCount,
+print_instr(MachinePid,
+	    #instruction{operand_count = OperandCount,
 			 opcode_num = OpcodeNum, operands = Operands,
 			 store_variable = StoreVariable,
 			 address = Address, opcode_length = OpcodeLength},
 	    Num) ->
+    Version = ?call_machine(version),
     io:format("~p - ~.16X(~p): ~p (oc: ~.16X)",
 	      [ Num, Address, "$", OpcodeLength,
-		op_name(OperandCount, OpcodeNum), OpcodeNum, "#$" ]),
+		op_name(OperandCount, Version, OpcodeNum), OpcodeNum, "#$" ]),
     print_operands(Operands),
     print_storevar(StoreVariable),
     io:fwrite("\n").
@@ -715,12 +721,12 @@ format_param({zscii, Value}) ->
 print_storevar(undef)         -> undef;
 print_storevar(StoreVariable) -> io:format(" -> ~.16X", [StoreVariable, "#$"]).
 
-op_name(oc_var, OpcodeNum)        -> oc_var_op_name(OpcodeNum);
-op_name(oc_2op, OpcodeNum)        -> oc_2op_op_name(OpcodeNum);
-op_name(oc_0op, OpcodeNum)        -> oc_0op_op_name(OpcodeNum);
-op_name(oc_1op, OpcodeNum)        -> oc_1op_op_name(OpcodeNum).
+op_name(oc_var, Version, OpcodeNum) -> oc_var_op_name(Version, OpcodeNum);
+op_name(oc_2op, Version, OpcodeNum) -> oc_2op_op_name(Version, OpcodeNum);
+op_name(oc_0op, Version, OpcodeNum) -> oc_0op_op_name(Version, OpcodeNum);
+op_name(oc_1op, Version, OpcodeNum) -> oc_1op_op_name(Version, OpcodeNum).
 
-oc_0op_op_name(OpcodeNum) ->
+oc_0op_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?NEW_LINE       -> new_line;
 	?NOP            -> nop;
@@ -737,7 +743,8 @@ oc_0op_op_name(OpcodeNum) ->
 	_Default        -> '??? (0OP)'
     end.
 
-oc_1op_op_name(OpcodeNum) ->
+oc_1op_op_name(Version, ?CALL_1N) when Version >= 5 -> call_1n;
+oc_1op_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?CALL_1S        -> call_1s;
 	?DEC            -> dec;
@@ -758,7 +765,7 @@ oc_1op_op_name(OpcodeNum) ->
 	_Default        -> '??? (1OP)'
     end.
 
-oc_2op_op_name(OpcodeNum) ->
+oc_2op_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?ADD            -> add;
 	?AND            -> 'and';
@@ -788,7 +795,7 @@ oc_2op_op_name(OpcodeNum) ->
 	_Default        -> '??? (2OP)'
     end.
 
-oc_var_op_name(OpcodeNum) ->
+oc_var_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?BUFFER_MODE    -> buffer_mode;
 	?CALL           -> call;

@@ -397,12 +397,21 @@ decode_packed_address(Memory, PackedAddress) ->
 % decodes the routine at the specified packed address
 create_routine(Memory, PackedAddress, InvocationSP, ReturnAddress, Arguments,
 	       ReturnVariable) -> 
+    Version = memory:version(Memory),
     Address = memory:unpack_address(Memory, PackedAddress),
     NumLocals = memory:get_byte(Memory, Address),
     NumArguments = length(Arguments),
-    Locals = Arguments ++ get_locals(Memory, Address + 1 + 2 * NumArguments,
-				     NumLocals - NumArguments),  
-    #routine{start_address = (Address + 1 +  NumLocals * 2),
+    if
+	Version < 5 ->
+	    Locals = Arguments ++ get_locals(Memory,
+					     Address + 1 + 2 * NumArguments,
+					     NumLocals - NumArguments),
+	    StartAddress = Address + 1 + NumLocals * 2;
+	true ->
+	    Locals = Arguments ++ lists:duplicate(NumLocals - NumArguments, 0),
+	    StartAddress = Address + 1
+    end,
+    #routine{start_address = StartAddress,
 	     local_vars = Locals, invocation_sp = InvocationSP,
 	     return_address = ReturnAddress, return_variable = ReturnVariable}.
 

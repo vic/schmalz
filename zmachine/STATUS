@@ -10,8 +10,41 @@ V5, V8 Status:
 - dictionary works
 - unpack_address
 - object table works
+- > V5 style routine calls
+
+1OP:
+  - @call_1n replaces @not
 
 TODO:
+
+2OP:
+  - @call_2n
+  - @set_colour
+  - @throw (opt.)
+0OP:
+  - @save becomes illegal here (opt.)
+  - @restore becomes illegal here (opt.)
+  - @catch (opt.)
+VAR:
+  - @read stores a value
+  - @not moved here
+  - @call_vn
+  - @call_vn2
+  - @tokenise
+  - @encode_text
+  - @copy_table
+  - @print_table
+  - @check_arg_count
+EXT:
+  - @save
+  - @restore
+  - @log_shift
+  - @art_shift
+  - @set_font
+  - @save_undo
+  - @restore_undo
+  - @print_unicode
+  - @check_unicode
 
 V4 Status:
 ----------
