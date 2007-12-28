@@ -165,7 +165,9 @@ get_operation(#instruction{operand_count = oc_1op, opcode_num = OpcodeNum},
 	?RET              -> fun ret/2;
 	_Default          -> fun op_halt/2
     end;
-get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum },
+get_operation(#instruction{operand_count = oc_2op, opcode_num = ?CALL_2N},
+	      Version) when Version >= 5 -> fun call_2s/2;
+get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum},
 	      _Version) ->
     case OpcodeNum of
 	?ADD              -> fun add/2;
@@ -195,6 +197,8 @@ get_operation(#instruction{operand_count = oc_2op, opcode_num = OpcodeNum },
 	?TEST_ATTR        -> fun test_attr/2;
 	_Default          -> fun op_halt/2
     end;
+get_operation(#instruction{operand_count = oc_var, opcode_num = ?CALL_VN},
+	      Version) when Version >= 5 -> fun call/2;
 get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	      _Version) ->
     case OpcodeNum of
@@ -219,6 +223,12 @@ get_operation(#instruction{operand_count = oc_var, opcode_num = OpcodeNum },
 	?SREAD            -> fun sread/2;
 	?STOREB           -> fun storeb/2;
 	?STOREW           -> fun storew/2;
+	_Default          -> fun op_halt/2
+    end;
+get_operation(#instruction{operand_count = oc_ext, opcode_num = OpcodeNum },
+	      _Version) ->
+    case OpcodeNum of
+	?SAVE_UNDO        -> fun save_undo/2;
 	_Default          -> fun op_halt/2
     end.
 
@@ -245,6 +255,7 @@ op_and(#instruction{operands = Operands, store_variable = StoreVar},
 
 buffer_mode(_, _) -> void. % not implemented
 
+% call is also call_vn, see call_1s
 call(#instruction{operands = Operands} = Instruction, MachinePid) ->
     [ PackedAddress | Arguments] = params(MachinePid, Operands),
     call_with_result(Instruction, PackedAddress, Arguments, MachinePid).
@@ -255,6 +266,7 @@ call_1s(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     call_with_result(Instruction, ?param(1), [], MachinePid).
 
+% call_2s is also call_2n, see call_1s
 call_2s(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     call_with_result(Instruction, ?param(1), [?param(2)], MachinePid).
@@ -540,6 +552,10 @@ rfalse(_Instruction, MachinePid) ->
 rtrue(_Instruction, MachinePid) ->
     ?return_from_routine(?TRUE).
 
+save_undo(#instruction{store_variable = StoreVar}, MachinePid) ->
+    % Undo not implemented
+    ?store_var(-1).
+
 scan_table(#instruction{operands = Operands, store_variable = StoreVar}
 	   = Instruction, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
@@ -581,7 +597,8 @@ split_window(#instruction{operands = Operands}, MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({split_window, ?param(1)}).
 
-sread(#instruction{operands = Operands}, MachinePid) ->
+sread(#instruction{operands = Operands, store_variable = StoreVar},
+      MachinePid) ->
     ?USE_UNSIGNED_PARAMETERS,
     MachineStatus = ?call_machine(status),
     %io:format("Status: ~p~n", [MachineStatus]),
@@ -593,7 +610,7 @@ sread(#instruction{operands = Operands}, MachinePid) ->
         true ->
 	    % this is the second invocation, parse the input
 	    % and write the results into the buffers
-	    ?call_machine({sread, ?param(1), ?param(2)}),
+	    ?call_machine({sread, ?param(1), ?param(2), StoreVar}),
             ?call_machine({set_status, run})
     end.
 
@@ -721,6 +738,7 @@ format_param({zscii, Value}) ->
 print_storevar(undef)         -> undef;
 print_storevar(StoreVariable) -> io:format(" -> ~.16X", [StoreVariable, "#$"]).
 
+op_name(oc_ext, Version, OpcodeNum) -> oc_ext_op_name(Version, OpcodeNum);
 op_name(oc_var, Version, OpcodeNum) -> oc_var_op_name(Version, OpcodeNum);
 op_name(oc_2op, Version, OpcodeNum) -> oc_2op_op_name(Version, OpcodeNum);
 op_name(oc_0op, Version, OpcodeNum) -> oc_0op_op_name(Version, OpcodeNum);
@@ -769,6 +787,7 @@ oc_2op_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?ADD            -> add;
 	?AND            -> 'and';
+	?CALL_2N        -> call_2n;
 	?CALL_2S        -> call_2s;
 	?CLEAR_ATTR     -> clear_attr;
 	?DEC_CHK        -> dec_chk;
@@ -795,6 +814,9 @@ oc_2op_op_name(_, OpcodeNum) ->
 	_Default        -> '??? (2OP)'
     end.
 
+oc_var_op_name(Version, ?CALL_VN) when Version >= 5  -> call_vn;
+oc_var_op_name(Version, ?CALL_VN2) when Version >= 5 -> call_vn2;
+oc_var_op_name(Version, ?AREAD) when Version >= 5    -> aread;
 oc_var_op_name(_, OpcodeNum) ->
     case OpcodeNum of
 	?BUFFER_MODE    -> buffer_mode;
@@ -819,4 +841,10 @@ oc_var_op_name(_, OpcodeNum) ->
 	?STOREB         -> storeb;
 	?STOREW         -> storew;
 	_Default        -> '??? (VAR)'
+    end.
+
+oc_ext_op_name(_, OpcodeNum) ->
+    case OpcodeNum of
+	?SAVE_UNDO      -> save_undo;
+	_Default        -> '??? (EXT)'
     end.

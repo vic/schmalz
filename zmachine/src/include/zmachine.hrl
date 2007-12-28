@@ -122,7 +122,19 @@
 -define(PRINT_TABLE,    16#1e).
 -define(CHECK_ARG_COUNT,16#1f).
 
+% EXT opcodes
+-define(SAVE_V5,        16#00).
+-define(RESTORE_V5,     16#01).
+-define(LOG_SHIFT,      16#02).
+-define(ART_SHIFT,      16#03).
+-define(SET_FONT,       16#04).
+-define(SAVE_UNDO,      16#09).
+-define(RESTORE_UNDO,   16#0a).
+-define(PRINT_UNICODE,  16#0b).
+-define(CHECK_UNICODE,  16#0c).
+
 % ZSCII constants
+-define(CR,             10).
 -define(NEWLINE,        13).
 -define(SPACE,          32).
 -define(EXCLAIMATION,   33).

@@ -29,7 +29,7 @@
 
 -module(util).
 -export([unsigned_to_signed16/1, signed_to_unsigned16/1,
-	 unsigned_to_signed14/1, list_replace/3]).
+	 unsigned_to_signed14/1, list_replace/3, min/2, max/2]).
 
 -define(WORD14_UNSIGNED_MAX, 16383).
 -define(WORD14_SIGNED_MAX, 8191).
@@ -37,6 +37,12 @@
 -define(WORD16_UNSIGNED_MAX, 65535).
 -define(WORD16_SIGNED_MAX, 32767).
 
+min(A, B) when A =< B -> A;
+min(_, B)             -> B.
+
+max(A, B) when A >= B -> A;
+max(_, B)             -> B.
+    
 unsigned_to_signed14(WordValue) when WordValue > ?WORD14_SIGNED_MAX ->
   -(?WORD14_UNSIGNED_MAX - (WordValue - 1));
 unsigned_to_signed14(WordValue) -> WordValue.

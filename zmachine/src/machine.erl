@@ -225,13 +225,13 @@ listen(#machine_state{pc = PC, memory = Memory, status = Status}
 					  TableAddress),
 	    ack(From, ok),
 	    listen(MachineState1);
-	{From, {send_input, InputString0}} ->
-	    InputString1 = string:to_lower(string:strip(InputString0)),
-	    MachineState1 = append_input(MachineState0, InputString1),
+	{From, {send_input, InputString}} ->
+	    MachineState1 = append_input(MachineState0, InputString),
 	    ack(From, ok),
 	    listen(MachineState1);
-	{From, {sread, TextBuffer, ParseBuffer}} ->
-	    MachineState1 = sread(MachineState0, TextBuffer, ParseBuffer),
+	{From, {sread, TextBuffer, ParseBuffer, StoreVar}} ->
+	    MachineState1 = sread(MachineState0, TextBuffer, ParseBuffer,
+				  StoreVar),
 	    ack(From, ok),
 	    listen(MachineState1);
 	{From, {read_char, StoreVar}} ->
@@ -408,7 +408,8 @@ create_routine(Memory, PackedAddress, InvocationSP, ReturnAddress, Arguments,
 					     NumLocals - NumArguments),
 	    StartAddress = Address + 1 + NumLocals * 2;
 	true ->
-	    Locals = Arguments ++ lists:duplicate(NumLocals - NumArguments, 0),
+	    NumEmptyLocals = util:max(0, NumLocals - NumArguments),
+	    Locals = Arguments ++ lists:duplicate(NumEmptyLocals, 0),
 	    StartAddress = Address + 1
     end,
     #routine{start_address = StartAddress,
@@ -462,13 +463,15 @@ stack_pop_to_sp(Stack, SP) -> lists:nthtail(length(Stack) - SP, Stack).
 %%% Parsing
 %%%-----------------------------------------------------------------------
 
-sread(MachineState0, TextBuffer, ParseBuffer) ->
+sread(MachineState0, TextBuffer, ParseBuffer, StoreVar) ->
     {InputString, #machine_state{memory = Memory0} = MachineState1} =
 	read_input(MachineState0),
+    Version = memory:version(Memory0),
     % 1. read the input into the text buffer
     % TextLength = ?call_machine({get_byte, TextBuffer}),
-    Memory1 = memory:copy_string_to_address(Memory0, TextBuffer + 1,
-					    InputString),
+    Memory1 = memory:copy_string_to_address(
+		Memory0, TextBuffer + 1,
+		string:to_lower(string:strip(InputString))),
     % 2. tokenize the input and store results to parse buffer
     %ParseBufferLength = memory:get_byte(Memory1, ParseBuffer),
     Tokens = dictionary:tokenize_and_lookup(Memory1, InputString),
@@ -477,7 +480,14 @@ sread(MachineState0, TextBuffer, ParseBuffer) ->
     Memory2 = memory:set_byte(Memory1, ParseBuffer + 1, length(Tokens)),
     % store token information
     Memory3 = store_tokens(Memory2, ParseBuffer + 2, Tokens),
-    MachineState1#machine_state{memory = Memory3}.
+    MachineState2 = MachineState1#machine_state{memory = Memory3},
+    if
+	Version >= 5 ->
+	    % TODO: Return Carriage return for now
+	    set_var(MachineState2, StoreVar, ?CR);
+	true         ->
+	    MachineState2
+    end.
 
 % this could possibly be a fold
 store_tokens(Memory0, _Address, []) -> Memory0;

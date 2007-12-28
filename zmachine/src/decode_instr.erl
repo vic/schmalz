@@ -68,7 +68,8 @@ get_instruction(MachinePid) ->
     case Form of
 	short    -> decode_short(MachinePid, Address, Version);
 	long     -> decode_long(MachinePid, Address, Version);
-	variable -> decode_variable(MachinePid, Address, Version)
+	variable -> decode_variable(MachinePid, Address, Version);
+	extended -> decode_extended(MachinePid, Address, Version)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,7 +137,11 @@ decode_variable(MachinePid, Address, Version) ->
 	    OperandTypes = extract_operand_types(?get_byte(Address + 1)),
 	    OpTypesOffset = 2
     end,
+    create_var_instruction(MachinePid, Address, Version, OperandCount,
+			   OpcodeNum, OperandTypes, OpTypesOffset).
 	    
+create_var_instruction(MachinePid, Address, Version, OperandCount, OpcodeNum,
+		       OperandTypes, OpTypesOffset) ->
     Operands = extract_operands(MachinePid, Address + OpTypesOffset,
 				OperandTypes),
     StoreVarAddress = Address + OpTypesOffset + num_operand_bytes(OperandTypes),
@@ -191,6 +196,18 @@ long_operand_type1(_Opcode) -> small_constant.
 % determine the type of operand 2 in the specified long opcode
 long_operand_type2(Opcode) when Opcode band ?MASK_BIT5 /= 0 -> variable;
 long_operand_type2(_Opcode) -> small_constant.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Extended instructions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% extracts the properties of the specified variable instruction
+decode_extended(MachinePid, Address, Version) ->
+    OpcodeNum = ?get_byte(Address + 1),
+    OperandTypes = extract_operand_types(?get_byte(Address + 2)),
+    OpTypesOffset = 3,
+    create_var_instruction(MachinePid, Address, Version, oc_ext,
+			   OpcodeNum, OperandTypes, OpTypesOffset).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% General purpose helpers for instructions

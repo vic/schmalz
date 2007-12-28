@@ -11,14 +11,22 @@ V5, V8 Status:
 - unpack_address
 - object table works
 - > V5 style routine calls
+- extended instructions
 
 1OP:
   - @call_1n replaces @not
+2OP:
+  - @call_2n
+VAR:
+  - @call_vn
+EXT:
+  - @save_undo implemented as nop
 
 TODO:
 
+- Problems with capital letters in input
+
 2OP:
-  - @call_2n
   - @set_colour
   - @throw (opt.)
 0OP:
@@ -28,7 +36,6 @@ TODO:
 VAR:
   - @read stores a value
   - @not moved here
-  - @call_vn
   - @call_vn2
   - @tokenise
   - @encode_text

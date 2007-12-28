@@ -61,11 +61,19 @@ is_store(oc_var, OpcodeNum, _Version)
   when OpcodeNum =:= ?CALL; OpcodeNum =:= ?RANDOM; OpcodeNum =:= ?CALL_VS2;
        OpcodeNum =:= ?READ_CHAR; OpcodeNum =:= ?SCAN_TABLE;
        OpcodeNum =:= ?NOT_V5             -> true;
+is_store(oc_ext, OpcodeNum, _Version)
+  when OpcodeNum =:= ?SAVE_V5; OpcodeNum =:= ?RESTORE_V5;
+       OpcodeNum =:= ?LOG_SHIFT; OpcodeNum =:= ?ART_SHIFT;
+       OpcodeNum =:= ?SET_FONT; OpcodeNum =:= ?SAVE_UNDO;
+       OpcodeNum =:= ?RESTORE_UNDO       -> true;
 is_store(_OpCount, _OpcodeNum, _Version) -> false.
 
 % determines whether the specified opcode is a call
+is_call(oc_var, ?CALL_VN, Version) when Version >= 5             -> true;
+is_call(oc_var, ?CALL_VN2, Version) when Version >= 5            -> true;
 is_call(oc_var, OpcodeNum, _Version)
   when OpcodeNum =:= ?CALL; OpcodeNum =:= ?CALL_VS2              -> true;
+is_call(oc_2op, ?CALL_2N, Version) when Version >= 5             -> true;
 is_call(oc_2op, OpcodeNum, _Version) when OpcodeNum =:= ?CALL_2S -> true;
 is_call(oc_1op, ?CALL_1S, Version) when Version >= 4             -> true;
 is_call(oc_1op, ?CALL_1N, Version) when Version >= 5             -> true;
