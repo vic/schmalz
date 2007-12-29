@@ -1,8 +1,9 @@
 This is the Z-Machine component of Schmalz, the Erlang Interactive
 Fiction system.
+
 - V3 support is almost complete.
 - V4 support is almost complete.
-- V5 support has been started
+- V5 support in progress
 
 V5, V8 Status:
 --------------
@@ -19,6 +20,7 @@ V5, V8 Status:
   - @call_2n
 VAR:
   - @call_vn
+  - @read stores a value
 EXT:
   - @save_undo implemented as nop
 
@@ -34,7 +36,6 @@ TODO:
   - @restore becomes illegal here (opt.)
   - @catch (opt.)
 VAR:
-  - @read stores a value
   - @not moved here
   - @call_vn2
   - @tokenise

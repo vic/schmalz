@@ -61,6 +61,14 @@ create(Memory0) ->
 	    Memory2 = memory:set_byte(Memory1, 16#21, 80),
 	    Memory3 = memory:set_byte(Memory2, 16#01, Flags1 bor 2#00111100),
 	    VmState1 = VmState0#machine_state{memory = Memory3};
+	Version > 5   ->
+	    Flags1 = memory:get_byte(Memory0, 16#01),
+	    Memory1 = memory:set_word16(Memory0, 16#22, 80),
+	    Memory2 = memory:set_word16(Memory1, 16#24, 40),
+	    Memory3 = memory:set_byte(Memory2, 16#26, 1),
+	    Memory4 = memory:set_byte(Memory2, 16#27, 1),
+	    Memory5 = memory:set_byte(Memory4, 16#01, Flags1 bor 2#00111100),
+	    VmState1 = VmState0#machine_state{memory = Memory5};
 	true ->
 	    VmState1 = VmState0
     end,    

@@ -129,7 +129,7 @@ decode_variable(MachinePid, Address, Version) ->
     OperandCount = variable_operand_count(OpcodeByte),
     OpcodeNum = ?variable_opcode_num(OpcodeByte),
     if
-	OpcodeNum =:= ?CALL_VS2 ->
+	OperandCount =:= oc_var, OpcodeNum =:= ?CALL_VS2 ->
 	    OperandTypes = extract_operand_types(?get_byte(Address + 1)) ++
 		extract_operand_types(?get_byte(Address + 2)),
 	    OpTypesOffset = 3;
