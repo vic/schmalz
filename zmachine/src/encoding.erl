@@ -57,13 +57,13 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% decodes the encoded ZSCII sequence at the specified address
 %% if MaxAddress is not "undef", a length check will be performed
-%% @spec decode_address(binary(), int(), int()) -> string().
+%% @spec decode_address(binary(), int(), int()) -> string()
 decode_address(Memory, Address, MaxAddress) ->
     decode_list(extract_list(Memory, Address, MaxAddress), Memory).
 
 %% Determine the number of bytes the Z-encoded string at the specified address
 %% occupies.
-%% @spec num_zencoded_bytes(binary(), int()) -> int().
+%% @spec num_zencoded_bytes(binary(), int()) -> int()
 num_zencoded_bytes(Memory, Address) ->
     <<Bit:1, _First:5, _Second:5, _Third:5>> =
 	memory:get_bytes(Memory, Address, 2),
@@ -73,13 +73,13 @@ num_zencoded_bytes(Memory, Address) ->
     end.
 
 %% Returns true if Char is a valid space character in ZSCII, false otherwise
-%% @spec is_space(int()) -> bool().
+%% @spec is_space(int()) -> bool()
 is_space(Char) -> Char =:= ?SPACE.
 
 %% The standard dictionary entries are ordered in Z encoding order,
 %% this function maps each character to an ordinal number, so a binary
 %% search correctly finds entries with special characters
-%% @spec ord(int()) -> int().
+%% @spec ord(int()) -> int()
 ord(Char) ->
     case Char of
 	?DOLLAR        -> 4;
@@ -115,7 +115,7 @@ ord(Char) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% retrieves the specified entry from the abbreviations table
-%% @spec abbrev(binary(), int(), int()) -> string. 
+%% @spec abbrev(binary(), int(), int()) -> string
 abbrev(Memory, CurrentChar, NextChar) ->
     EntryAddr = memory:abbrev_address(Memory) +
 	((32 * (CurrentChar - 1) + NextChar) * ?WORD16_LEN),
@@ -124,7 +124,6 @@ abbrev(Memory, CurrentChar, NextChar) ->
 
 %% decodes the specified list of 5 bit entries into a list of ZSCII
 %% characters
-%% @spec()
 decode_list(Input, Memory) ->
     {_Alphabet, _NewInput, Result} = decode_it({a0, Input, [], Memory}),
     lists:reverse(Result).

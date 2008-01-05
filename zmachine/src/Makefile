@@ -1,34 +1,12 @@
-# This is a basic Makefile for buildling the Erlang Z-code interpreter
-# 
-.SUFFIXES: .erl .beam .yrl
+include ../../support/include.mk
 
 CFLAGS = -DDEBUG
-#TESTFILE = ../testfiles/amfv.z4
-#TESTFILE = ../testfiles/minizork.z3
-TESTFILE = ../testfiles/curses.z5
 
-.erl.beam:
-	erlc ${CFLAGS} -W $<
+all: $(EBIN_FILES)
 
-.yrl.erl:
-	erlc -W $<
-
-ERL = erl -boot start_clean
-
-MODS = util memory encoding dictionary objects \
-  instruction_info decode_instr instruction \
-  machine streams screen main
-
-all: compile
-
-compile: ${MODS:%=%.beam} subdirs
-
-subdirs:
-
-main: compile
-	${ERL} -noshell -s main main -storyfile ${TESTFILE}
+debug:
+	$(MAKE) DEBUG=-DDEBUG
 
 clean:
-	rm -rf *.beam erl_crash.dump
-
+	rm -rf $(EBIN_FILES)
 

@@ -66,7 +66,7 @@ create(Memory0) ->
 	    Memory1 = memory:set_word16(Memory0, 16#22, 80),
 	    Memory2 = memory:set_word16(Memory1, 16#24, 40),
 	    Memory3 = memory:set_byte(Memory2, 16#26, 1),
-	    Memory4 = memory:set_byte(Memory2, 16#27, 1),
+	    Memory4 = memory:set_byte(Memory3, 16#27, 1),
 	    Memory5 = memory:set_byte(Memory4, 16#01, Flags1 bor 2#00111100),
 	    VmState1 = VmState0#machine_state{memory = Memory5};
 	true ->
@@ -450,21 +450,21 @@ get_locals(Memory, Address, NumLocals) ->
 %%% outside of it
 %%%-----------------------------------------------------------------------
 
-%% @spec push([L], any()) -> [L].
+%% @spec stack_push([L], any()) -> [L]
 stack_push(Stack, Value) -> [Value | Stack].
 
-%% @spec pop([L]) -> [L].
+%% @spec stack_pop([L]) -> [L]
 stack_pop([])          -> undef;
 stack_pop([_ | Stack]) -> Stack.
 
-%% @spec top([L]) -> any().
+%% @spec stack_top([L]) -> any()
 stack_top([])          -> undef;
 stack_top([Value | _]) -> Value.
 
-%% @spec stack_size([L]) -> (int()).
+%% @spec stack_size([L]) -> (int())
 stack_size(Stack) -> length(Stack).
 
-%% @spec pop_to_sp([L]) -> ([L]).
+%% @spec stack_pop_to_sp([L], int()) -> ([L])
 stack_pop_to_sp(Stack, SP) -> lists:nthtail(length(Stack) - SP, Stack).
 
 %%%-----------------------------------------------------------------------

@@ -112,7 +112,7 @@ is_print(oc_0op, OpcodeNum)
 is_print(_OperandCount, _OpcodeNum)                   -> false.
     
 %% retrieves the operand count encoded in the specified short opcode
-%% @spec short_operand_count(int()) -> atom(). 
+%% @spec short_operand_count(int()) -> atom()
 short_operand_count(OpcodeByte) ->
     case OpcodeByte band ?MASK_BITS_4_5 of
 	?SHORT_OPCOUNT_0OP -> oc_0op;

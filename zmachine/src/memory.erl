@@ -72,7 +72,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% reads the game from the specified file and returns a Memory object
-%% @spec read_file(string()) -> binary().
+%% @spec read_file(string()) -> binary()
 read_file(Filename) ->
     {_Status, Memory} = file:read_file(Filename),
     Memory.
@@ -82,33 +82,33 @@ read_file(Filename) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% returns thhe story file version
-%% @spec version(binary()) -> int().
+%% @spec version(binary()) -> int()
 version(Memory) -> memory:get_byte(Memory, ?VERSION).
 
 %% returns the address of the dictionary
-%% @spec dictionary_address(binary()) -> int().
+%% @spec dictionary_address(binary()) -> int()
 dictionary_address(Memory) -> memory:get_word16(Memory, ?DICTIONARY).
 
 %% returns the address of the object table
-%% @spec object_table_address(binary()) -> int().
+%% @spec object_table_address(binary()) -> int()
 object_table_address(Memory) -> memory:get_word16(Memory, ?OBJECTS).
 
 %% returns the address of the abbreviations table
-%% @spec abbrev_address(binary()) -> int().
+%% @spec abbrev_address(binary()) -> int()
 abbrev_address(Memory) -> memory:get_word16(Memory, ?ABBREVIATIONS).
 
 %% returns the initial program counter
-%% @spec initial_pc(binary()) -> int().
+%% @spec initial_pc(binary()) -> int()
 initial_pc(Memory) -> memory:get_word16(Memory, ?INITIAL_PC).
 
 %% returns the address of the global variables
-%% @spec global_var_address(binary()) -> int().
+%% @spec global_var_address(binary()) -> int()
 global_var_address(Memory) -> memory:get_word16(Memory, ?GLOBAL_VARS).
 
 %% Unpacks a packed address, works for versions 3-5 and 8.
 %% Version 6 and 7 have two different unpack formulas and are not handled
 %% here.
-%% @spec unpack_address(binary(), int()) -> int(). 
+%% @spec unpack_address(binary(), int()) -> int()
 unpack_address(Memory, PackedAddress) ->
     case version(Memory) of
 	3        -> PackedAddress * 2;
@@ -132,16 +132,16 @@ copy_string_to_address(Memory, Address, [Character|String]) ->
 get_bytes(Memory, ByteNum, NumBytes) ->
     <<_:ByteNum/binary, Result:NumBytes/binary, _/binary>> = Memory, Result.
 
-%% @spec get_word16(binary(), int()) -> int().
+%% @spec get_word16(binary(), int()) -> int()
 get_word16(Memory, ByteNum) -> get_bits(Memory, ByteNum, 16).
 
-%% @spec set_word16(binary(), int(), int()) -> binary().
+%% @spec set_word16(binary(), int(), int()) -> binary()
 set_word16(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 16, Value).
 
-%% @spec get_byte(binary(), int()) -> int().
+%% @spec get_byte(binary(), int()) -> int()
 get_byte(Memory, ByteNum) -> get_bits(Memory, ByteNum, 8).
 
-%% @spec set_byte(binary(), int(), int()) -> binary().
+%% @spec set_byte(binary(), int(), int()) -> binary()
 set_byte(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 8, Value).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -149,12 +149,12 @@ set_byte(Memory, ByteNum, Value) -> set_bits(Memory, ByteNum, 8, Value).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Sets the Value at the specified byte position
-%% @spec set_bits(binary(), int(), int(), int()) -> binary().
+%% @spec set_bits(binary(), int(), int(), int()) -> binary()
 set_bits(Memory, ByteNum, NumBits, Value) ->
     <<Start:ByteNum/binary, _:NumBits, End/binary>> = Memory,
     <<Start:ByteNum/binary, Value:NumBits, End/binary>>.
 
 % Returns the value with the specified number of bits from the binary
-%% @spec get_bits(binary(), int(), int()) -> int().
+%% @spec get_bits(binary(), int(), int()) -> int()
 get_bits(Memory, ByteNum, NumBits) ->
     <<_:ByteNum/binary, Element:NumBits, _/binary>> = Memory, Element.

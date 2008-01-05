@@ -1,0 +1,5 @@
+Schmalz is an Interactive Fiction System written in Erlang. Currenty,
+it supports Z-code games through a ZMPP core.
+
+-- Wei-ju Wu, November 27, 2007
+

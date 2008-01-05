@@ -40,13 +40,13 @@
 %% String into a list of token tuples of the form
 %% {Position in String, Address in Dictionary, String}, stripping out white
 %% space, but leaving in the separators defined in the dictionary
-%% @spec tokenize_and_lookup(binary(), string()) -> {int(), int(), string()}.
+%% @spec tokenize_and_lookup(binary(), string()) -> {int(), int(), string()}
 tokenize_and_lookup(Memory, String) ->
     lists:map(fun(Token) -> lookup(Memory, Token) end,
 	      tokenize(Memory, String)).
 
 %% Prints the dictionary.
-%% @spec print(binary()) -> void().
+%% @spec print(binary()) -> void()
 print(Memory) ->
     {_N, _Separators, _EntryLength, NumEntries} = header(Memory),
     print(Memory, 0, NumEntries - 1).
@@ -94,7 +94,7 @@ lookup(Memory, {Pos, String} = Token, Left, Right, MaxWordLength) ->
 %% if Str1 == Str2 ->  0
 %% if Str1 < Str2  -> -1
 %% if Str1 > Str2  ->  1
-%% @spec(string(), string()) -> int().
+%% @spec(string(), string()) -> int()
 strcmp([], []) -> 0;
 strcmp([], _Str2) -> -1;
 strcmp(_Str1, []) -> 1;
@@ -110,8 +110,8 @@ strcmp([Char1 | Str1], [Char2 | Str2]) ->
 %% tokenize_with_separators() takes a list of token pairs, which were
 %% generated in tokenize_with_spaces() and splits them further into
 %% a potentially larger list of token pairs
-%% @spec tokenize_with_separators(string(), string(), [{int(), string()}],
-%%                                int()) ->[{int(), string()}].
+%% @spec tokenize_with_separators(string(), {int(), string()},
+%%         [{int(), string}], int(), int()) ->[{int(), string()}]
 tokenize_with_separators(_Separators, {_TokenIndex, String} , Acc, Index,
 			 GlobalIndex)  when Index > length(String) ->
     [ {GlobalIndex, String} | Acc ];
@@ -135,7 +135,7 @@ tokenize_with_separators(Separators, {_TokenIndex, String} = Token , Acc,
 %% a Z-machine specific tokenise function that divides a string at ZSCII
 %% whitespace and returns a list of tokens, represented by a pair of
 %% {Position in string, Token}.
-%% @spec tokenize_with_space(string()) -> [{int(), string()}].
+%% @spec tokenize_with_spaces(string()) -> [{int(), string()}]
 tokenize_with_spaces(String) ->
     lists:reverse(lists:filter(fun nonempty_token/1,
 		  tokenize_with_spaces(String, [], 1, 1))).
@@ -159,7 +159,7 @@ nonempty_token({_Position, String}) -> length(String) > 0.
 
 %% a tolerant substring function which returns an empty string when the
 %% end index is smaller than the start index
-%% @spec strip(string(), int(), int()) -> string().
+%% @spec substr(string(), int(), int()) -> string()
 substr(_String, Start, Stop) when Stop < Start -> [];
 substr(String, Start, Stop) -> string:substr(String, Start, Stop).
 

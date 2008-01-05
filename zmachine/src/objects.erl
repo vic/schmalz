@@ -82,7 +82,7 @@
 %% insert the object with ObjectNum as the first child of the object
 %% with the number NewParentNum, the former first child of NewParent
 %% will be the first sibling of the inserted object.
-%% @spec insert_object(binary(), int(), int()) -> binary().
+%% @spec insert_object(binary(), int(), int()) -> binary()
 insert_object(Memory0, ObjectNum, NewParentNum) ->
     Memory1 = remove_object(Memory0, ObjectNum),
     % insert in new parent
@@ -92,7 +92,7 @@ insert_object(Memory0, ObjectNum, NewParentNum) ->
 
 %% removes the specified object completely out of its previous
 %% context
-%% @spec remove_object(binary(), int()) -> binary().
+%% @spec remove_object(binary(), int()) -> binary()
 remove_object(Memory0, ObjectNum) ->
     PreviousSiblingNum = previous_sibling(Memory0, ObjectNum,
 					  parent(Memory0, ObjectNum)),
@@ -107,7 +107,7 @@ remove_object(Memory0, ObjectNum) ->
     
 %% checks if the an object has a specific attribute and returns true or
 %% false
-%% @spec has_attribute(binary(), int(), int()) -> bool().
+%% @spec has_attribute(binary(), int(), int()) -> bool()
 has_attribute(Memory, ObjectNum, AttributeNum) ->
     #object{attributes = Attributes} = get_object(Memory, ObjectNum),
     Version = memory:version(Memory),
@@ -120,7 +120,7 @@ has_attribute(Memory, ObjectNum, AttributeNum) ->
     Attributes band AttributeMask =:= AttributeMask.
 
 %% Sets the specified object attribute.
-%% @spec set_attribute(binary(), int(), int()) -> bool().
+%% @spec set_attribute(binary(), int(), int()) -> bool()
 set_attribute(Memory, ObjectNum, AttributeNum) ->
     Version = memory:version(Memory),
     ObjectAddress = object_address(Memory, ObjectNum, Version),
@@ -138,7 +138,7 @@ set_attribute(Memory, ObjectNum, AttributeNum) ->
     end.
 
 %% Clears the specified object attribute.
-%% @spec clear_attribute(binary(), int(), int()) -> bool().
+%% @spec clear_attribute(binary(), int(), int()) -> bool()
 clear_attribute(Memory, ObjectNum, AttributeNum) ->
     Version = memory:version(Memory),
     ObjectAddress = object_address(Memory, ObjectNum, Version),
@@ -158,26 +158,26 @@ clear_attribute(Memory, ObjectNum, AttributeNum) ->
     end.
 
 %% retrieves the parent of the specified object
-%% @spec parent(binary(), int()) -> int().
+%% @spec parent(binary(), int()) -> int()
 parent(Memory, ObjectNum) ->
     #object{parent = Parent} = get_object(Memory, ObjectNum),
     Parent.
 
 %% retrieves the child of the specified object
-%% @spec child(binary(), int()) -> int().
+%% @spec child(binary(), int()) -> int()
 child(Memory, ObjectNum) ->
     #object{child = Child} = get_object(Memory, ObjectNum),
     Child.
 
 %% retrieves the sibling of the specified object
-%% @spec sibling(binary(), int()) -> int().
+%% @spec sibling(binary(), int()) -> int()
 sibling(Memory, ObjectNum) ->
     #object{sibling = Sibling} = get_object(Memory, ObjectNum),
     Sibling.
 
 %% Retrieves the short name of the specified object as a list of
 %% ZSCII characters
-%% @spec name(binary(), int()) -> [int()]. 
+%% @spec name(binary(), int()) -> [int()]
 name(Memory, ObjectNum) ->
     #object{properties = PropTableAddress} = get_object(Memory, ObjectNum),
     encoding:decode_address(Memory, PropTableAddress + 1, undef).
@@ -187,14 +187,14 @@ name(Memory, ObjectNum) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% retrieves the address of an object's property data.
-%% @spec prop_addr(binary(), int(), int()) -> int().
+%% @spec property_address(binary(), int(), int()) -> int()
 property_address(Memory, ObjectNum, PropertyNum) ->
     object_prop_addr(Memory, PropertyNum,
 		     object_prop_addr0(Memory, ObjectNum)).
 
 %% Retrieves the property number following the specified property number.
 %% If PropertyNum is 0, return the first property number of the object
-%% @spec next_property_num(binary(), int(), int()) -> int().
+%% @spec next_property_num(binary(), int(), int()) -> int()
 next_property_num(Memory, ObjectNum, 0) ->
     property_num(Memory, object_prop_addr0(Memory, ObjectNum));
 next_property_num(Memory, ObjectNum, PropertyNum) ->
@@ -202,13 +202,13 @@ next_property_num(Memory, ObjectNum, PropertyNum) ->
     property_num(Memory, PropDataAddr + property_length(Memory, PropDataAddr)).
 
 %% retrieves the specified object property
-%% @spec get_property(binary(), int(), int()) -> int().
+%% @spec property(binary(), int(), int()) -> int()
 property(Memory, ObjectNum, PropertyNum) ->
     PropertyDataAddress = property_address(Memory, ObjectNum, PropertyNum),
     property_or_default(Memory, PropertyNum, PropertyDataAddress).
 
 %% sets the specified object property
-%% @spec set_property(binary(), int(), int(), int()) -> binary().
+%% @spec set_property(binary(), int(), int(), int()) -> binary()
 set_property(Memory, ObjectNum, PropertyNum, Value) ->
     PropertyDataAddress = property_address(Memory, ObjectNum, PropertyNum),
     PropertySize =
@@ -226,7 +226,7 @@ set_property(Memory, ObjectNum, PropertyNum, Value) ->
 
 %% retrieves the length of the property which data resides at the
 %% specified address.
-%% @spec property_length(binary(), int()) -> int().
+%% @spec property_length(binary(), int()) -> int()
 property_length(Memory, PropertyDataAddress) ->
     {_, PropertyLength} = property_info(Memory, PropertyDataAddress),
     PropertyLength.
@@ -238,7 +238,7 @@ property_length(Memory, PropertyDataAddress) ->
 -define(property_length_v3(PropertySizeByte), PropertySizeByte div 32 + 1).
 
 %% address of first property, same for all versions
-%% @spec object_prop_addr(binary(), int()) -> int().
+%% @spec object_prop_addr0(binary(), int()) -> int()
 object_prop_addr0(Memory, ObjectNum) ->
     #object{properties = PropTableAddress} = get_object(Memory, ObjectNum),
     HeaderSize = memory:get_byte(Memory, PropTableAddress) * 2 + 1,
@@ -434,7 +434,7 @@ get_object(Memory, Object) ->
 	    child = Child, properties = Properties}.
 
 %% retrieves the address of an object
-%% @spec get_object_address(binary(), int(), int()) -> int()
+%% @spec object_address(binary(), int(), int()) -> int()
 object_address(Memory, Object, Version) ->
     memory:object_table_address(Memory) + num_bytes_prop_defaults(Version) +
 	(Object - 1) * obj_table_entry_size(Version).
