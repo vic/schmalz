@@ -30,7 +30,10 @@
 %%%   creates a new MachineState object
 %%%-----------------------------------------------------------------------
 -module(machine).
--export([create/1, rpc/2, print/1, print_locals/1, dump_input_buffer/1]).
+-behaviour(gen_server).
+-export([start_link/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+	 code_change/3]).
 -include("include/zmachine.hrl").
 -record(machine_state, {memory, value_stack, call_stack, pc, streams,
 			stream_objs, status}).
@@ -42,8 +45,13 @@
 	memory:global_var_address(Memory) + (VarNum - 16#10) * 2).
 -define(trunc16(Value), Value band 2#1111111111111111).
 
+%% Starts the machine as a gen_server.
+%% @spec start_link(atom(), memory(), int()) -> Result
+start_link(Name, Memory, Timeout) ->
+    gen_server:start_link({local, Name}, ?MODULE, [Memory, Timeout], []).
+
 % creates a new MachineState object from the specified Memory object
-create(Memory0) ->
+init([Memory0, Timeout]) ->
     VmState0 = #machine_state{memory = Memory0, value_stack = [],
 			      call_stack = [],
 			      pc = memory:initial_pc(Memory0),
@@ -71,214 +79,139 @@ create(Memory0) ->
 	    VmState1 = VmState0#machine_state{memory = Memory5};
 	true ->
 	    VmState1 = VmState0
-    end,    
-    spawn(fun() -> listen(VmState1) end).
+    end,
+    {ok, VmState1, Timeout}.
 
-rpc(MachinePid, Message) ->
-    MachinePid ! {self(), Message},
-    receive
-	{MachinePid, Response} -> Response
-    after 500 ->
-        io:format("waiting for ack timed out"),
-	halt
-    end.
+handle_cast(_Msg, State)            -> {noreply, State}.
+handle_info(timeout, State)         -> {stop, "Session timeout !", State};
+handle_info(_Info, State)           -> {noreply, State}.
+terminate(_Reason, _State)          -> ok.
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-ack(MachinePid, Message) ->
-    MachinePid ! {self(), Message}.
 
-listen(#machine_state{pc = PC, memory = Memory, status = Status}
-       = MachineState0) ->
-    receive
-	{From, status} ->
-	    ack(From, Status),
-	    listen(MachineState0);
-	{From, {set_status, NewStatus}} ->
-	    ack(From, ok),
-	    listen(MachineState0#machine_state{status = NewStatus});
-	{From, version} ->
-	    ack(From, memory:version(Memory)),
-	    listen(MachineState0);
-	{From, {call_routine, PackedAddress, ReturnAddress, Arguments,
-		ReturnVar}} ->
-	    MachineState1 = call_routine(MachineState0, PackedAddress,
-					 ReturnAddress, Arguments, ReturnVar),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, get_screen} ->
-	    {Screen, MachineState1} = get_screen(MachineState0),
-	    ack(From, Screen),
-	    listen(MachineState1);
-	{From, pc} ->
-	    ack(From, PC),
-	    listen(MachineState0);
-	{From, {set_pc, NewPC}} ->
-	    ack(From, ok),
-	    listen(set_pc(MachineState0, NewPC));
-	{From, {increment_pc, Increment}} ->
-	    ack(From, ok),
-	    listen(set_pc(MachineState0, (PC + Increment)));
-	{From, {get_byte, Address}} ->
-	    ack(From, memory:get_byte(Memory, Address)),
-	    listen(MachineState0);
-	{From, {set_byte, Address, Value}} ->
-	    MachineState1 = MachineState0#machine_state{
-	      memory = memory:set_byte(Memory, Address, Value)},
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {get_word16, Address}} ->
-	    ack(From, memory:get_word16(Memory, Address)),
-	    listen(MachineState0);
-	{From, {set_word16, Address, Value}} ->
-	    MachineState1 = MachineState0#machine_state{
-	      memory = memory:set_word16(Memory, Address, Value)},
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {get_var, VarNum}} ->
-	    {Value, MachineState1 } = get_var(MachineState0, VarNum),
-	    ack(From, Value),
-	    listen(MachineState1);
-	{From, {set_var, VarNum, Value}} ->
-	    MachineState1 = set_var(MachineState0, VarNum, Value),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {return_from_routine, ReturnValue}} ->
-	    MachineState1 = return_from_routine(MachineState0, ReturnValue),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, update_status_line} ->
-	    MachineState1 = update_status_line(MachineState0),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {decode_address, Address, MaxAddress}} ->
-	    ack(From, encoding:decode_address(Memory, Address, MaxAddress)),
-	    listen(MachineState0);
-	{From, {num_zencoded_bytes, Address}} ->
-	    ack(From, encoding:num_zencoded_bytes(Memory, Address)),
-	    listen(MachineState0);
-	{From, {print_zscii, ZsciiString}} ->
-	    MachineState1 = print_zscii(MachineState0, ZsciiString),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {print_addr, ByteAddress}} ->
-	    MachineState1 = print_zscii(
-	        MachineState0, encoding:decode_address(Memory, ByteAddress,
-						       undef)),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {print_paddr, PackedAddress}} ->
-	    MachineState1 = print_zscii(
-	        MachineState0, decode_packed_address(Memory, PackedAddress)),
-	    ack(From, ok),
-	    listen(MachineState1);
+handle_call(Request, _,
+	    #machine_state{pc = PC, memory = Memory, status = Status}
+	    = VmState0) ->
+    case Request of
+	status  -> {reply, Status, VmState0};
+	version -> {reply, memory:version(Memory), VmState0};
+	pc      -> {reply, PC, VmState0};
+	{set_status, NewStatus} ->
+	    {reply, ok, VmState0#machine_state{status = NewStatus}};
+	{call_routine, PackedAddress, ReturnAddress, Arguments, ReturnVar} ->
+	    VmState1 = call_routine(VmState0, PackedAddress,
+				    ReturnAddress, Arguments, ReturnVar),
+	    {reply, ok, VmState1};
+	get_screen ->
+	    {Screen, VmState1} = get_screen(VmState0),
+	    {reply, Screen, VmState1};
+	{set_pc, NewPC} -> {reply, ok, set_pc(VmState0, NewPC)};
+	{increment_pc, Increment} ->
+	    {reply, ok, set_pc(VmState0, (PC + Increment))};
+	update_status_line -> {reply, ok, update_status_line(VmState0)};
+        % Memory access
+	{get_byte, Address} ->
+	    {reply, memory:get_byte(Memory, Address), VmState0};
+	{set_byte, Address, Value} ->
+	    VmState1 = VmState0#machine_state{
+			 memory = memory:set_byte(Memory, Address, Value)},
+	    {reply, ok, VmState1};
+	{get_word16, Address} ->
+	    {reply, memory:get_word16(Memory, Address), VmState0};
+
+	{set_word16, Address, Value} ->
+	    VmState1 = VmState0#machine_state{
+			 memory = memory:set_word16(Memory, Address, Value)},
+	    {reply, ok, VmState1};
+	{get_var, VarNum} ->
+	    {Value, VmState1} = get_var(VmState0, VarNum),
+	    {reply, Value, VmState1};
+	{set_var, VarNum, Value} ->
+	    VmState1 = set_var(VmState0, VarNum, Value),
+	    {reply, ok, VmState1};
+	{return_from_routine, ReturnValue} ->
+	    VmState1 = return_from_routine(VmState0, ReturnValue),
+	    {reply, ok, VmState1};
+	{decode_address, Address, MaxAddress} ->
+	    {reply, encoding:decode_address(Memory, Address, MaxAddress),
+	     VmState0};
+	{num_zencoded_bytes, Address} ->
+	    {reply, encoding:num_zencoded_bytes(Memory, Address), VmState0};
+	{print_zscii, ZsciiString} ->
+	    {reply, ok, print_zscii(VmState0, ZsciiString)};
+	{print_addr, ByteAddress} ->
+	    VmState1 = print_zscii(VmState0,
+				   encoding:decode_address(Memory, ByteAddress,
+							   undef)),
+	    {reply, ok, VmState1};
+	{print_paddr, PackedAddress} ->
+	    VmState1 = print_zscii(VmState0,
+				   decode_packed_address(Memory,
+							 PackedAddress)),
+	    {reply, ok, VmState1};
 	% Objects
-	{From, {print_object, ObjectNum}} ->
-	    MachineState1 = print_zscii(
-	        MachineState0, objects:name(Memory, ObjectNum)),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {object_parent, Object}} ->
-	    ack(From, objects:parent(Memory, Object)),
-	    listen(MachineState0);
-	{From, {object_child, Object}} ->
-	    ack(From, objects:child(Memory, Object)),
-	    listen(MachineState0);
-	{From, {object_sibling, Object}} ->
-	    ack(From, objects:sibling(Memory, Object)),
-	    listen(MachineState0);
-	{From, {insert_object, Object, Destination}} ->
-	    MachineState1 = insert_object(MachineState0, Object, Destination),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {remove_object, Object}} ->
-	    MachineState1 = remove_object(MachineState0, Object),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {object_has_attribute, Object, Attribute}} ->
-	    ack(From, objects:has_attribute(Memory, Object, Attribute)),
-	    listen(MachineState0);
-	{From, {object_set_attribute, Object, Attribute}} ->
-	    MachineState1 = object_set_attribute(MachineState0, Object,
-						 Attribute),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {object_clear_attribute, Object, Attribute}} ->
-	    MachineState1 = object_clear_attribute(MachineState0, Object,
-						   Attribute),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {object_property, Object, Property}} ->
-	    ack(From, objects:property(Memory, Object, Property)),
-	    listen(MachineState0);
-	{From, {object_set_property, Object, Property, Value}} ->
-	    MachineState1 = object_set_property(MachineState0, Object, Property,
-						Value),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {object_prop_addr, Object, Property}} ->
-	    ack(From, objects:property_address(Memory, Object, Property)),
-	    listen(MachineState0);
-	{From, {object_prop_len, PropertyDataAddress}} ->
-	    ack(From, objects:property_length(Memory, PropertyDataAddress)),
-	    listen(MachineState0);
-	{From, {object_next_property, Object, Property}} ->
-	    ack(From, objects:next_property_num(Memory, Object, Property)),
-	    listen(MachineState0);
+	{print_object, ObjectNum} ->
+	    VmState1 = print_zscii(VmState0, objects:name(Memory, ObjectNum)),
+	    {reply, ok, VmState1};
+	{object_parent, Object} ->
+	    {reply, objects:parent(Memory, Object), VmState0};
+	{object_child, Object} ->
+	    {reply, objects:child(Memory, Object), VmState0};
+	{object_sibling, Object} ->
+	    {reply, objects:sibling(Memory, Object), VmState0};
+	{insert_object, Object, Destination} ->
+	    {reply, ok, insert_object(VmState0, Object, Destination)};
+	{remove_object, Object} ->
+	    {reply, ok, remove_object(VmState0, Object)};
+	{object_has_attribute, Object, Attribute} ->
+	    {reply, objects:has_attribute(Memory, Object, Attribute), VmState0};
+	{object_set_attribute, Object, Attribute} ->
+	    {reply, ok, object_set_attribute(VmState0, Object, Attribute)};
+	{object_clear_attribute, Object, Attribute} ->
+	    {reply, ok, object_clear_attribute(VmState0, Object, Attribute)};
+	{object_property, Object, Property} ->
+	    {reply, objects:property(Memory, Object, Property), VmState0};
+	{object_set_property, Object, Property, Value} ->
+	    {reply, ok, object_set_property(VmState0, Object, Property, Value)};
+	{object_prop_addr, Object, Property} ->
+	    {reply, objects:property_address(Memory, Object, Property),
+	     VmState0};
+	{object_prop_len, PropertyDataAddress} ->
+	    {reply, objects:property_length(Memory, PropertyDataAddress),
+	     VmState0};
+	{object_next_property, Object, Property} ->
+	    {reply, objects:next_property_num(Memory, Object, Property),
+	     VmState0};
 	% I/O
-	{From, {output_stream, StreamNum}} ->
-	    MachineState1 = output_stream(MachineState0, StreamNum),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {output_stream, StreamNum, TableAddress}} ->
-	    MachineState1 = output_stream(MachineState0, StreamNum,
-					  TableAddress),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {send_input, InputString}} ->
-	    MachineState1 = append_input(MachineState0, InputString),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {sread, TextBuffer, ParseBuffer, StoreVar}} ->
-	    MachineState1 = sread(MachineState0, TextBuffer, ParseBuffer,
-				  StoreVar),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {read_char, StoreVar}} ->
-	    MachineState1 = read_char(MachineState0, StoreVar),
-	    ack(From, ok),
-	    listen(MachineState1);
+	{output_stream, StreamNum} ->
+	    {reply, ok, output_stream(VmState0, StreamNum)};
+	{output_stream, StreamNum, TableAddress} ->
+	    {reply, ok, output_stream(VmState0, StreamNum, TableAddress)};
+	{send_input, InputString} ->
+	    {reply, ok, append_input(VmState0, InputString)};
+	{sread, TextBuffer, ParseBuffer, StoreVar} ->
+	    {reply, ok, sread(VmState0, TextBuffer, ParseBuffer, StoreVar)};
+	{read_char, StoreVar} -> {reply, ok, read_char(VmState0, StoreVar)};
 	% Window operations
-	{From, {erase_window, WindowNum}} ->
-	    MachineState1 = erase_window(MachineState0, WindowNum),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {split_window, Lines}} ->
-	    MachineState1 = split_window(MachineState0, Lines),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {set_cursor, Line, Column}} ->
-	    MachineState1 = set_cursor(MachineState0, Line, Column),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {set_text_style, StyleFlags}} ->
-	    MachineState1 = set_text_style(MachineState0, StyleFlags),
-	    ack(From, ok),
-	    listen(MachineState1);
-	{From, {set_window, WindowNum}} ->
-	    MachineState1 = set_window(MachineState0, WindowNum),
-	    ack(From, ok),
-	    listen(MachineState1);
+	{erase_window, WindowNum} ->
+	    {reply, ok, erase_window(VmState0, WindowNum)};
+	{split_window, Lines} ->
+	    {reply, ok, split_window(VmState0, Lines)};
+	{set_cursor, Line, Column} ->
+	    {reply, ok, set_cursor(VmState0, Line, Column)};
+	{set_text_style, StyleFlags} ->
+	    {reply, ok, set_text_style(VmState0, StyleFlags)};
+	{set_window, WindowNum} ->
+	    {reply, ok, set_window(VmState0, WindowNum)};
 	% Other
-	{From, {scan_table, X, Table, Len}} ->
-	    ack(From, scan_table(Memory, X, Table, Len)),
-	    listen(MachineState0);
-	{From, {scan_table, X, Table, Len, Form}} ->
-	    ack(From, scan_table(Memory, X, Table, Len, Form)),
-	    listen(MachineState0);
+	{scan_table, X, Table, Len}       ->
+	    {reply, scan_table(Memory, X, Table, Len), VmState0};
+	{scan_table, X, Table, Len, Form} ->
+	    {reply, scan_table(Memory, X, Table, Len, Form), VmState0};
 	% Default
-	{From,Other} ->
+	Other ->
 	    io:format("Error in VM request: ~p~n", [Other]),
-	    ack(From, {error, Other}),
-	    listen(MachineState0)
+	    {reply, {error, Other}, VmState0}
     end.
 
 sp(#machine_state{value_stack = ValueStack}) -> stack_size(ValueStack).
@@ -552,9 +485,6 @@ read_input(#machine_state{streams = Streams0} = VmState0) ->
     {InputString, Streams1} = streams:read_input(Streams0),
     {InputString, VmState0#machine_state{streams = Streams1}}.
 
-dump_input_buffer(#machine_state{streams = Streams}) ->
-    streams:dump_input(Streams).
-
 erase_window(#machine_state{stream_objs = #stream_objs{screen = Screen0}
 			    = StreamObjs0} = VmState0, WindowNum) ->
     VmState0#machine_state{stream_objs =
@@ -637,15 +567,3 @@ scan_table(Memory, X, Address, Len) ->
 
 scan_table(_Memory0, _X, _Table, _Len, _Form) ->
     undef.
-
-%%%-----------------------------------------------------------------------
-%%% State printing
-%%%-----------------------------------------------------------------------
-
-print(#machine_state{value_stack = ValueStack, call_stack = CallStack}) ->
-    io:format("  stack = ~w~n", [ValueStack]),    
-    print_locals(stack_top(CallStack)).
-
-print_locals(#routine{local_vars = LocalVars}) ->
-    io:format("  locals = ~w~n", [LocalVars]);
-print_locals(undef) -> undef.

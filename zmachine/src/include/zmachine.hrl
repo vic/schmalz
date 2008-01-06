@@ -157,3 +157,8 @@
 % A record that holds the supported stream objects
 -record(stream_objs, {screen, memory}).
 -record(mem_stream, {table_address, num_chars, buffer}).
+
+-define(call_machine(Message), gen_server:call(ServerRef, Message)).
+-define(get_byte(Address), gen_server:call(ServerRef, {get_byte, Address})).
+-define(get_word16(Address), gen_server:call(ServerRef,
+					     {get_word16, Address})).

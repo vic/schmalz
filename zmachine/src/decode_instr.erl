@@ -49,9 +49,6 @@
 -define(long_opcode_num(OpcodeByte), OpcodeByte band ?MASK_LOWER_5_BITS).
 -define(short_opcode_num(OpcodeByte), OpcodeByte band ?MASK_LOWER_4_BITS).
 -define(DUMMY_BRANCH_INFO, instruction:create_branch_info(undef, 0, 0, undef)).
--define(call_machine(Message), machine:rpc(MachinePid, Message)).
--define(get_byte(Address), machine:rpc(MachinePid, {get_byte, Address})).
--define(get_word16(Address), machine:rpc(MachinePid, {get_word16, Address})).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Top level
@@ -61,22 +58,22 @@
 % get_instruction should return a function object in combination with
 % the required parameters
 
-get_instruction(MachinePid) ->
+get_instruction(ServerRef) ->
     Address = ?call_machine(pc),
     Form = opcode_type(?get_byte(Address)),
     Version = ?call_machine(version),
     case Form of
-	short    -> decode_short(MachinePid, Address, Version);
-	long     -> decode_long(MachinePid, Address, Version);
-	variable -> decode_variable(MachinePid, Address, Version);
-	extended -> decode_extended(MachinePid, Address, Version)
+	short    -> decode_short(ServerRef, Address, Version);
+	long     -> decode_long(ServerRef, Address, Version);
+	variable -> decode_variable(ServerRef, Address, Version);
+	extended -> decode_extended(ServerRef, Address, Version)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Short instructions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-decode_short(MachinePid, Address, Version) ->
+decode_short(ServerRef, Address, Version) ->
     OpcodeByte = ?get_byte(Address),
     OperandCount = short_operand_count(OpcodeByte),
     OpcodeNum = ?short_opcode_num(OpcodeByte),
@@ -88,16 +85,16 @@ decode_short(MachinePid, Address, Version) ->
 	    Str = ?call_machine({decode_address, Address + 1, undef}),
 	    {[{zscii, Str}], ?call_machine({num_zencoded_bytes, Address + 1})};
         true ->
-	    {[{OperandType, get_operand_at(MachinePid, Address + 1,
+	    {[{OperandType, get_operand_at(ServerRef, Address + 1,
 					   OperandType)}], 0}
     end,
     NumOperandBytes = operand_length(OperandType),
     StoreVarAddress = Address + ?LEN_OPCODE + NumOperandBytes,
     StoreVar =
-	storevar(MachinePid, StoreVarAddress,
+	storevar(ServerRef, StoreVarAddress,
 		 instruction_info:is_store(OperandCount, OpcodeNum, Version)),
     BranchInfoAddress = StoreVarAddress + storevar_len(StoreVar),
-    BranchInfo = branch_info(MachinePid, BranchInfoAddress,
+    BranchInfo = branch_info(ServerRef, BranchInfoAddress,
 			     instruction_info:is_branch(OperandCount,
 							OpcodeNum,
 							undef)),
@@ -124,7 +121,7 @@ short_operand_count(OpcodeByte) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % extracts the properties of the specified variable instruction
-decode_variable(MachinePid, Address, Version) ->
+decode_variable(ServerRef, Address, Version) ->
     OpcodeByte = ?get_byte(Address),
     OperandCount = variable_operand_count(OpcodeByte),
     OpcodeNum = ?variable_opcode_num(OpcodeByte),
@@ -137,19 +134,19 @@ decode_variable(MachinePid, Address, Version) ->
 	    OperandTypes = extract_operand_types(?get_byte(Address + 1)),
 	    OpTypesOffset = 2
     end,
-    create_var_instruction(MachinePid, Address, Version, OperandCount,
+    create_var_instruction(ServerRef, Address, Version, OperandCount,
 			   OpcodeNum, OperandTypes, OpTypesOffset).
 	    
-create_var_instruction(MachinePid, Address, Version, OperandCount, OpcodeNum,
+create_var_instruction(ServerRef, Address, Version, OperandCount, OpcodeNum,
 		       OperandTypes, OpTypesOffset) ->
-    Operands = extract_operands(MachinePid, Address + OpTypesOffset,
+    Operands = extract_operands(ServerRef, Address + OpTypesOffset,
 				OperandTypes),
     StoreVarAddress = Address + OpTypesOffset + num_operand_bytes(OperandTypes),
-    StoreVar = storevar(MachinePid, StoreVarAddress,
+    StoreVar = storevar(ServerRef, StoreVarAddress,
 			instruction_info:is_store(OperandCount, OpcodeNum,
 						  Version)),
     BranchInfoAddress = StoreVarAddress + storevar_len(StoreVar),
-    BranchInfo = branch_info(MachinePid, BranchInfoAddress,
+    BranchInfo = branch_info(ServerRef, BranchInfoAddress,
 			     instruction_info:is_branch(OperandCount,
 							OpcodeNum,
 							undef)),
@@ -172,14 +169,14 @@ variable_operand_count(OpcodeByte) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % decodes the long instruction at the specified address
-decode_long(MachinePid, Address, Version) ->
+decode_long(ServerRef, Address, Version) ->
     Opcode = ?get_byte(Address),
     OpcodeNum = ?long_opcode_num(Opcode),
     StoreVarAddress = Address + ?LEN_OPCODE + ?LEN_LONG_OPERANDS,
-    StoreVar = storevar(MachinePid, StoreVarAddress,
+    StoreVar = storevar(ServerRef, StoreVarAddress,
 			instruction_info:is_store(oc_2op, OpcodeNum, Version)),
     BranchInfoAddress = StoreVarAddress + storevar_len(StoreVar), 
-    BranchInfo = branch_info(MachinePid, BranchInfoAddress,
+    BranchInfo = branch_info(ServerRef, BranchInfoAddress,
 			     instruction_info:is_branch(oc_2op, OpcodeNum,
 							Version)),
     OpcodeLength = ?LEN_OPCODE + ?LEN_LONG_OPERANDS + storevar_len(StoreVar) +
@@ -202,11 +199,11 @@ long_operand_type2(_Opcode) -> small_constant.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % extracts the properties of the specified variable instruction
-decode_extended(MachinePid, Address, Version) ->
+decode_extended(ServerRef, Address, Version) ->
     OpcodeNum = ?get_byte(Address + 1),
     OperandTypes = extract_operand_types(?get_byte(Address + 2)),
     OpTypesOffset = 3,
-    create_var_instruction(MachinePid, Address, Version, oc_ext,
+    create_var_instruction(ServerRef, Address, Version, oc_ext,
 			   OpcodeNum, OperandTypes, OpTypesOffset).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -215,8 +212,8 @@ decode_extended(MachinePid, Address, Version) ->
 
 % retrieves the store variable at the specified address if possible, otherwise
 % undef will be returned
-storevar(MachinePid, StoreVarAddress, true)       -> ?get_byte(StoreVarAddress);
-storevar(_MachinePid, _StoreVarAddress, _IsStore) -> undef.
+storevar(ServerRef, StoreVarAddress, true)       -> ?get_byte(StoreVarAddress);
+storevar(_ServerRef, _StoreVarAddress, _IsStore) -> undef.
 
 % retrieves the length of the store variable. If not set, the length is 0,
 % otherwise it is 1
@@ -224,7 +221,7 @@ storevar_len(undef)     -> 0;
 storevar_len(_StoreVar) -> 1.
 
 % extracts the branch information stored at the specified address
-branch_info(MachinePid, BranchInfoAddress, true) -> 
+branch_info(ServerRef, BranchInfoAddress, true) -> 
     BranchByte1 = ?get_byte(BranchInfoAddress),
     BranchOnTrue = BranchByte1 band ?MASK_BIT7 /= 0,
     IsShortOffset = BranchByte1 band ?MASK_BIT6 /= 0,
@@ -241,7 +238,7 @@ branch_info(MachinePid, BranchInfoAddress, true) ->
     instruction:create_branch_info(BranchOnTrue, NumOffsetBytes,
 				   BranchInfoAddress + NumOffsetBytes,
 				   BranchOffset);
-branch_info(_MachinePid, _BranchInfoAddress, _IsBranch) ->
+branch_info(_ServerRef, _BranchInfoAddress, _IsBranch) ->
     ?DUMMY_BRANCH_INFO.
 
 % determines the opcode type from the first opcode byte
@@ -283,19 +280,19 @@ get_op_type(OpTypeByte, Pos) ->
 
 % extracts the operands at the specified position with the specified
 % operand types
-extract_operands(MachinePid, Address, OperandTypes) ->
-    lists:reverse(extract_operands(MachinePid, Address, OperandTypes, [])).
-extract_operands(_MachinePid, _Address, [], Output) -> Output;
-extract_operands(MachinePid, Address, [ OperandType | OperandTypes ],
+extract_operands(ServerRef, Address, OperandTypes) ->
+    lists:reverse(extract_operands(ServerRef, Address, OperandTypes, [])).
+extract_operands(_ServerRef, _Address, [], Output) -> Output;
+extract_operands(ServerRef, Address, [ OperandType | OperandTypes ],
 		 Output) ->
     if
 	OperandType =:= large_constant                           ->
 	    Constant = ?get_word16(Address),
-	    extract_operands(MachinePid, Address + 2, OperandTypes,
+	    extract_operands(ServerRef, Address + 2, OperandTypes,
 			     [ Constant | Output ]);
 	OperandType =:= small_constant; OperandType =:= variable ->
 	    Operand = ?get_byte(Address),
-	    extract_operands(MachinePid, Address + 1, OperandTypes,
+	    extract_operands(ServerRef, Address + 1, OperandTypes,
 			     [ Operand | Output ])
     end.
 
@@ -311,5 +308,5 @@ operand_length(zscii)          -> 0;
 operand_length(_OperandType)   -> 1.
 
 % retrieves an operand at the specified address
-get_operand_at(MachinePid, Address, large_constant) -> ?get_word16(Address);
-get_operand_at(MachinePid, Address, _OperandCount)  -> ?get_byte(Address).
+get_operand_at(ServerRef, Address, large_constant) -> ?get_word16(Address);
+get_operand_at(ServerRef, Address, _OperandCount)  -> ?get_byte(Address).

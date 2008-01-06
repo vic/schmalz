@@ -36,7 +36,7 @@
 %%% size_branch_offset(BranchInfo)
 %%%   number of bytes the BranchInfo occupies in the instruction
 %%%
-%%% execute(Instruction, MachinePid)
+%%% execute(Instruction, ServerRef)
 %%%   executes an Instruction that might have an effect on MachineState
 %%%
 %%% print(Instruction)
@@ -53,11 +53,10 @@
 -define(TRUE,  1).
 -define(STACK, 0).
 -define(trunc16(Value), Value band 16#ffff).
--define(USE_UNSIGNED_PARAMETERS, Parameters = params(MachinePid, Operands)).
+-define(USE_UNSIGNED_PARAMETERS, Parameters = params(ServerRef, Operands)).
 -define(USE_SIGNED_PARAMETERS,
-	Parameters = signed_params(MachinePid, Operands)).
+	Parameters = signed_params(ServerRef, Operands)).
 -define(param(Index), lists:nth(Index, Parameters)).
--define(call_machine(Message), machine:rpc(MachinePid, Message)).
 -define(store_var2(StoreVar, Value),
 	?call_machine({set_var, StoreVar, util:signed_to_unsigned16(Value)})).
 -define(store_var(Value), ?store_var2(StoreVar, Value)).
@@ -67,7 +66,7 @@
 	?call_machine({increment_pc, OpcodeLength})).
 
 -define(branch_or_advance(Condition),
-	branch_or_advance(MachinePid, Instruction, Condition)).
+	branch_or_advance(ServerRef, Instruction, Condition)).
 
 %%%-----------------------------------------------------------------------
 %%% BranchInfo representation
@@ -105,14 +104,14 @@ create(OperandCount, OpcodeNum, Operands, StoreVariable,
 		 store_variable = StoreVariable, branch_info = BranchInfo,
 		 address = Address, opcode_length = OpcodeLength}.
 
-execute(Instruction, MachinePid) ->
+execute(Instruction, ServerRef) ->
     Version = ?call_machine(version),
     Execute = get_operation(Instruction, Version),
-    Execute(Instruction, MachinePid),
-    update_pc(Instruction, MachinePid, Version).
+    Execute(Instruction, ServerRef),
+    update_pc(Instruction, ServerRef, Version).
 
 update_pc(#instruction{operand_count = OperandCount, opcode_num = OpcodeNum,
-		       opcode_length = OpcodeLength}, MachinePid, Version) ->
+		       opcode_length = OpcodeLength}, ServerRef, Version) ->
     IsCall   = instruction_info:is_call(OperandCount, OpcodeNum, Version),
     IsBranch = instruction_info:is_branch(OperandCount, OpcodeNum, Version),
     IsReturn = instruction_info:is_return(OperandCount, OpcodeNum, Version),
@@ -237,7 +236,7 @@ get_operation(#instruction{operand_count = oc_ext, opcode_num = OpcodeNum },
 %%%-----------------------------------------------------------------------
 
 add(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     % the strange thing is that if we do not go explicitly, the
     % value sent to the VM is plain wrong under OTP 5.5.5 and 5.6.
@@ -247,7 +246,7 @@ add(#instruction{operands = Operands, store_variable = StoreVar},
     ?store_var(?trunc16(Sum)).
 
 op_and(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     % see @add
     Result = ?param(1) band ?param(2),
@@ -256,29 +255,29 @@ op_and(#instruction{operands = Operands, store_variable = StoreVar},
 buffer_mode(_, _) -> void. % not implemented
 
 % call is also call_vn, see call_1s
-call(#instruction{operands = Operands} = Instruction, MachinePid) ->
-    [ PackedAddress | Arguments] = params(MachinePid, Operands),
-    call_with_result(Instruction, PackedAddress, Arguments, MachinePid).
+call(#instruction{operands = Operands} = Instruction, ServerRef) ->
+    [ PackedAddress | Arguments] = params(ServerRef, Operands),
+    call_with_result(Instruction, PackedAddress, Arguments, ServerRef).
 
 % call_1s is also call_1n, because there is no store specified, it will
 % be thrown away
-call_1s(#instruction{operands = Operands} = Instruction, MachinePid) ->
+call_1s(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
-    call_with_result(Instruction, ?param(1), [], MachinePid).
+    call_with_result(Instruction, ?param(1), [], ServerRef).
 
 % call_2s is also call_2n, see call_1s
-call_2s(#instruction{operands = Operands} = Instruction, MachinePid) ->
+call_2s(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
-    call_with_result(Instruction, ?param(1), [?param(2)], MachinePid).
+    call_with_result(Instruction, ?param(1), [?param(2)], ServerRef).
 
-call_vs2(#instruction{operands = Operands} = Instruction, MachinePid) ->
-    [Routine | Params] = params(MachinePid, Operands),
+call_vs2(#instruction{operands = Operands} = Instruction, ServerRef) ->
+    [Routine | Params] = params(ServerRef, Operands),
     %io:format("@call_vs, routine: ~w, Params: ~p~n", [Routine, Params]),
-    call_with_result(Instruction, Routine, Params, MachinePid).
+    call_with_result(Instruction, Routine, Params, ServerRef).
 
 call_with_result(#instruction{address = Address, opcode_length = OpcodeLength,
 			      store_variable = StoreVar},
-		 PackedAddress, Arguments, MachinePid) ->
+		 PackedAddress, Arguments, ServerRef) ->
     if
 	PackedAddress =:= 0 ->
 	    ?store_var(?FALSE),
@@ -288,11 +287,11 @@ call_with_result(#instruction{address = Address, opcode_length = OpcodeLength,
 			   Arguments, StoreVar})
     end.
 
-clear_attr(#instruction{operands = Operands}, MachinePid) ->
+clear_attr(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_clear_attribute, ?param(1), ?param(2)}).
 
-dec(#instruction{operands = Operands}, MachinePid) ->
+dec(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
@@ -300,7 +299,7 @@ dec(#instruction{operands = Operands}, MachinePid) ->
     Result = util:unsigned_to_signed16(Value) - 1,
     ?store_var2(VarNum, ?trunc16(Result)).
 
-dec_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
+dec_chk(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
@@ -309,55 +308,55 @@ dec_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?branch_or_advance(DecValue < ?param(2)).
 
 op_div(#instruction{operands = Operands, store_variable = StoreVar},
-       MachinePid) ->
+       ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     Quotient = ?param(1) div ?param(2),
     ?store_var(?trunc16(Quotient)).
 
-erase_window(#instruction{operands = Operands}, MachinePid) ->
+erase_window(#instruction{operands = Operands}, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     ?call_machine({erase_window, ?param(1)}).
 
 get_child(#instruction{operands = Operands, store_variable = StoreVar}
-	  = Instruction, MachinePid) ->
+	  = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     FirstChild = ?call_machine({object_child, ?param(1)}),
     ?store_var(FirstChild),
     ?branch_or_advance(FirstChild /= 0).
 
 get_parent(#instruction{operands = Operands, store_variable = StoreVar},
-	   MachinePid) ->
+	   ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({object_parent, ?param(1)})).
 
 get_sibling(#instruction{operands = Operands, store_variable = StoreVar}
-	    = Instruction, MachinePid) ->
+	    = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     Sibling = ?call_machine({object_sibling, ?param(1)}),
     ?store_var(Sibling),
     ?branch_or_advance(Sibling /= 0).
 
 get_next_prop(#instruction{operands = Operands, store_variable = StoreVar},
-	      MachinePid) ->
+	      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({object_next_property, ?param(1), ?param(2)})).
 
 get_prop(#instruction{operands = Operands, store_variable = StoreVar},
-	      MachinePid) ->
+	      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({object_property, ?param(1), ?param(2)})).
 
 get_prop_addr(#instruction{operands = Operands, store_variable = StoreVar},
-	      MachinePid) ->
+	      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({object_prop_addr, ?param(1), ?param(2)})).
 
 get_prop_len(#instruction{operands = Operands, store_variable = StoreVar},
-	      MachinePid) ->
+	      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({object_prop_len, ?param(1)})).
 
-inc(#instruction{operands = Operands}, MachinePid) ->
+inc(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
@@ -365,7 +364,7 @@ inc(#instruction{operands = Operands}, MachinePid) ->
     Result = util:unsigned_to_signed16(Value) + 1,
     ?store_var2(VarNum, ?trunc16(Result)).
 
-inc_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
+inc_chk(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     VarNum = ?param(1),
     Value = ?call_machine({get_var, VarNum}),
@@ -373,140 +372,140 @@ inc_chk(#instruction{operands = Operands} = Instruction, MachinePid) ->
     ?call_machine({set_var, VarNum, IncValue}),
     ?branch_or_advance(IncValue > ?param(2)).
 
-insert_obj(#instruction{operands = Operands}, MachinePid) ->
+insert_obj(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({insert_object, ?param(1), ?param(2)}).
 
-je(#instruction{operands = Operands} = Instruction, MachinePid) ->
-    [First | CompareList] = signed_params(MachinePid, Operands),
+je(#instruction{operands = Operands} = Instruction, ServerRef) ->
+    [First | CompareList] = signed_params(ServerRef, Operands),
     %io:format("@JE, First: ~w, CompareList: ~p~n", [First, CompareList]),
     ?branch_or_advance(
        length(lists:filter(fun(X) -> X =:= First end, CompareList)) > 0).
 
-jg(#instruction{operands = Operands} = Instruction, MachinePid) ->
+jg(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     ?branch_or_advance(?param(1) > ?param(2)).
 
-jin(#instruction{operands = Operands} = Instruction, MachinePid) ->
+jin(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?branch_or_advance(?call_machine({object_parent, ?param(1)}) =:= ?param(2)).
 
-jl(#instruction{operands = Operands} = Instruction, MachinePid) ->
+jl(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     ?branch_or_advance(?param(1) < ?param(2)).
 
 
-jump(#instruction{operands = Operands}, MachinePid) ->
+jump(#instruction{operands = Operands}, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     ?call_machine({set_pc, ?call_machine(pc) + ?param(1) + 1}).
 
-jz(#instruction{operands = Operands} = Instruction, MachinePid) ->
+jz(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?branch_or_advance(?param(1) =:= 0).
 
 load(#instruction{operands = Operands, store_variable = StoreVar},
-     MachinePid) ->
+     ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({get_var, ?param(1)})).
 
 loadb(#instruction{operands = Operands, store_variable = StoreVar},
-      MachinePid) ->
+      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({get_byte, ?param(1) + ?param(2)})).
 
 loadw(#instruction{operands = Operands, store_variable = StoreVar},
-      MachinePid) ->
+      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var(?call_machine({get_word16, ?param(1) + 2 * ?param(2)})).
 
 mod(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     % see @add
     Remainder = ?param(1) rem ?param(2),
     ?store_var(?trunc16(Remainder)).
 
 mul(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     % see @add
     Product = ?param(1) * ?param(2),
     ?store_var(?trunc16(Product)).
 
-new_line(_Instruction, MachinePid) ->
+new_line(_Instruction, ServerRef) ->
     ?call_machine({print_zscii, [?NEWLINE]}).
 
-nop(_Instruction, _MachinePid) -> void.
+nop(_Instruction, _ServerRef) -> void.
 
 op_not(#instruction{operands = Operands, store_variable = StoreVar},
-       MachinePid) ->
+       ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     % see @add
     Result = bnot ?param(1),
     ?store_var(Result).
 
 op_or(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     % see @add
     Result = ?param(1) bor ?param(2),
     ?store_var(Result).
 
-output_stream(#instruction{operands = Operands}, MachinePid) ->
+output_stream(#instruction{operands = Operands}, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     case length(Operands) of
 	1 -> ?call_machine({output_stream, ?param(1)});
 	2 -> ?call_machine({output_stream, ?param(1), ?param(2)})
     end.
 
-piracy(Instruction, MachinePid) -> ?branch_or_advance(true).
+piracy(Instruction, ServerRef) -> ?branch_or_advance(true).
 
-pop(_Instruction, MachinePid) ->
+pop(_Instruction, ServerRef) ->
     ?call_machine({get_var, ?STACK}).
 
-print(#instruction{operands = [{zscii, String}]}, MachinePid) ->
+print(#instruction{operands = [{zscii, String}]}, ServerRef) ->
     ?call_machine({print_zscii, String}).
 
-print_addr(#instruction{operands = Operands}, MachinePid) ->
+print_addr(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({print_addr, ?param(1)}).
 
-print_ret(#instruction{operands = [{zscii, String}]}, MachinePid) ->
+print_ret(#instruction{operands = [{zscii, String}]}, ServerRef) ->
     ?call_machine({print_zscii, String}),
     ?call_machine({print_zscii, [?NEWLINE]}),
     ?return_from_routine(?TRUE).    
 
-print_char(#instruction{operands = Operands}, MachinePid) ->
+print_char(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({print_zscii, [?param(1)]}).
 
-print_num(#instruction{operands = Operands}, MachinePid) ->
+print_num(#instruction{operands = Operands}, ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     ?call_machine({print_zscii, io_lib:write(?param(1))}).
 
-print_obj(#instruction{operands = Operands}, MachinePid) ->
+print_obj(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({print_object, ?param(1)}).
 
-print_paddr(#instruction{operands = Operands}, MachinePid) ->
+print_paddr(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({print_paddr, ?param(1)}).
 
-pull(#instruction{operands = Operands}, MachinePid) ->
+pull(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     Value = ?call_machine({get_var, ?STACK}),
     ?store_var2(?param(1), Value). 
 
-push(#instruction{operands = Operands}, MachinePid) ->
+push(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var2(?STACK, ?param(1)). 
 
-put_prop(#instruction{operands = Operands}, MachinePid) ->
+put_prop(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_property, ?param(1), ?param(2), ?param(3)}).
 
 random(#instruction{operands = Operands, store_variable = StoreVar},
-       MachinePid) ->
+       ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     Range = ?param(1),
     if
@@ -520,7 +519,7 @@ random(#instruction{operands = Operands, store_variable = StoreVar},
 	    ?store_var(random:uniform(?param(1)))
     end.
 
-read_char(#instruction{store_variable = StoreVar}, MachinePid) ->
+read_char(#instruction{store_variable = StoreVar}, ServerRef) ->
     MachineStatus = ?call_machine(status),
     if
 	MachineStatus =:= run ->
@@ -534,30 +533,30 @@ read_char(#instruction{store_variable = StoreVar}, MachinePid) ->
             ?call_machine({set_status, run})
     end.
 
-remove_obj(#instruction{operands = Operands}, MachinePid) ->
+remove_obj(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({remove_object, ?param(1)}).
 
-ret(#instruction{operands = Operands}, MachinePid) ->
+ret(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?return_from_routine(?param(1)).
 
-ret_popped(_Instruction, MachinePid) ->
+ret_popped(_Instruction, ServerRef) ->
     StackValue = ?call_machine({get_var, ?STACK}),
     ?return_from_routine(StackValue).
 
-rfalse(_Instruction, MachinePid) ->
+rfalse(_Instruction, ServerRef) ->
     ?return_from_routine(?FALSE).
 
-rtrue(_Instruction, MachinePid) ->
+rtrue(_Instruction, ServerRef) ->
     ?return_from_routine(?TRUE).
 
-save_undo(#instruction{store_variable = StoreVar}, MachinePid) ->
+save_undo(#instruction{store_variable = StoreVar}, ServerRef) ->
     % Undo not implemented
     ?store_var(-1).
 
 scan_table(#instruction{operands = Operands, store_variable = StoreVar}
-	   = Instruction, MachinePid) ->
+	   = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     NumParams = length(Operands),
     if
@@ -572,33 +571,33 @@ scan_table(#instruction{operands = Operands, store_variable = StoreVar}
     ?store_var(Addr),
     ?branch_or_advance(Addr > 0).
 
-set_attr(#instruction{operands = Operands}, MachinePid) ->
+set_attr(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({object_set_attribute, ?param(1), ?param(2)}).
 
-set_cursor(#instruction{operands = Operands}, MachinePid) ->
+set_cursor(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_cursor, ?param(1), ?param(2)}).
 
-set_text_style(#instruction{operands = Operands}, MachinePid) ->
+set_text_style(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_text_style, ?param(1)}).
 
-set_window(#instruction{operands = Operands}, MachinePid) ->
+set_window(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_window, ?param(1)}).
 
-show_status(_Instruction, MachinePid) ->
+show_status(_Instruction, ServerRef) ->
     ?call_machine(update_status_line).
 
-sound_effect(_Instruction, _MachinePid) -> void. % not implemented
+sound_effect(_Instruction, _ServerRef) -> void. % not implemented
 
-split_window(#instruction{operands = Operands}, MachinePid) ->
+split_window(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({split_window, ?param(1)}).
 
 sread(#instruction{operands = Operands, store_variable = StoreVar},
-      MachinePid) ->
+      ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     MachineStatus = ?call_machine(status),
     %io:format("Status: ~p~n", [MachineStatus]),
@@ -614,61 +613,61 @@ sread(#instruction{operands = Operands, store_variable = StoreVar},
             ?call_machine({set_status, run})
     end.
 
-store(#instruction{operands = Operands}, MachinePid) ->
+store(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?store_var2(?param(1), ?param(2)).
 
-storeb(#instruction{operands = Operands}, MachinePid) ->
+storeb(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_byte, ?param(1) + ?param(2), ?param(3)}).
 
-storew(#instruction{operands = Operands}, MachinePid) ->
+storew(#instruction{operands = Operands}, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?call_machine({set_word16, ?param(1) + ?param(2) * 2, ?param(3)}).
 
 sub(#instruction{operands = Operands, store_variable = StoreVar},
-    MachinePid) ->
+    ServerRef) ->
     ?USE_SIGNED_PARAMETERS,
     % see @add
     Diff = ?param(1) - ?param(2),
     ?store_var(?trunc16(Diff)).
 
-test(#instruction{operands = Operands} = Instruction, MachinePid) ->
+test(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?branch_or_advance((?param(1) band ?param(2)) =:= ?param(2)).
 
-test_attr(#instruction{operands = Operands} = Instruction, MachinePid) ->
+test_attr(#instruction{operands = Operands} = Instruction, ServerRef) ->
     ?USE_UNSIGNED_PARAMETERS,
     ?branch_or_advance(?call_machine({object_has_attribute,
 				     ?param(1), ?param(2)})).
 
-verify(Instruction, MachinePid) -> ?branch_or_advance(true). % do not check
+verify(Instruction, ServerRef) -> ?branch_or_advance(true). % do not check
 
-op_halt(_Operands, MachinePid) -> ?call_machine({set_status, halt}).
+op_halt(_Operands, ServerRef) -> ?call_machine({set_status, halt}).
 
 %%%-----------------------------------------------------------------------
 %%% Branch execution
 %%%-----------------------------------------------------------------------
 
-branch_or_advance(MachinePid, #instruction{opcode_length = OpcodeLength,
+branch_or_advance(ServerRef, #instruction{opcode_length = OpcodeLength,
 					     branch_info = BranchInfo},
                   Condition) ->
     #branch_info{branch_on_true = BranchOnTrue} = BranchInfo,
     if
 	Condition =:= BranchOnTrue ->
-	    do_branch(MachinePid, BranchInfo);
+	    do_branch(ServerRef, BranchInfo);
 	true ->
 	    ?next_instruction()
     end.
 
 % Performs the branch according to the specification
-do_branch(MachinePid,
+do_branch(ServerRef,
 	  #branch_info{offset = 0})                                         ->
     ?return_from_routine(?FALSE);
-do_branch(MachinePid,
+do_branch(ServerRef,
 	  #branch_info{offset = 1})                                         ->
     ?return_from_routine(?TRUE);
-do_branch(MachinePid,
+do_branch(ServerRef,
 	  #branch_info{offset = Offset,
 		       address_after_branch_data = AddressAfterBranchData}) ->
     ?call_machine({set_pc, AddressAfterBranchData + Offset - 2}).
@@ -680,33 +679,33 @@ do_branch(MachinePid,
 % Extracts a ParameterList from the
 % specified list of operands. This is the standard method to use when the
 % signum of all parameters is irrelevant
-params(MachinePid, Operands) ->
-    params_from_operands(MachinePid, Operands, fun operand_value/2).
+params(ServerRef, Operands) ->
+    params_from_operands(ServerRef, Operands, fun operand_value/2).
 
 % similar to params, but instead, the list is assumed to contain 16 bit
 % signed integer values 
-signed_params(MachinePid, Operands) ->
-    params_from_operands(MachinePid, Operands, fun signed_operand_value/2).
+signed_params(ServerRef, Operands) ->
+    params_from_operands(ServerRef, Operands, fun signed_operand_value/2).
 
 % create a list of parameters from the specified operands.
-params_from_operands(MachinePid, Operands, Extract) ->
-    lists:map(fun(Operand) -> Extract(MachinePid, Operand) end, Operands).
+params_from_operands(ServerRef, Operands, Extract) ->
+    lists:map(fun(Operand) -> Extract(ServerRef, Operand) end, Operands).
 
 % Returns the value of the specified operand, depending on the operand
 % type.
-operand_value(MachinePid, {variable, Value})     ->
+operand_value(ServerRef, {variable, Value})     ->
     ?call_machine({get_var, Value});
-operand_value(_MachinePid, {_OperandType, Value}) -> Value.
+operand_value(_ServerRef, {_OperandType, Value}) -> Value.
 
 % Returns the signed operand value
-signed_operand_value(MachinePid, Operand) ->
-    util:unsigned_to_signed16(operand_value(MachinePid, Operand)).
+signed_operand_value(ServerRef, Operand) ->
+    util:unsigned_to_signed16(operand_value(ServerRef, Operand)).
 
 %%%-----------------------------------------------------------------------
 %%% Printing Instructions debugging support
 %%%-----------------------------------------------------------------------
 
-print_instr(MachinePid,
+print_instr(ServerRef,
 	    #instruction{operand_count = OperandCount,
 			 opcode_num = OpcodeNum, operands = Operands,
 			 store_variable = StoreVariable,

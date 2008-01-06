@@ -27,7 +27,7 @@
 
 -ifdef(DEBUG).
 -define(print_instruction(Instruction),
-	instruction:print_instr(MachinePid, Instruction, Num)).
+	instruction:print_instr(ServerRef, Instruction, Num)).
 -else.
 -define(print_instruction(Instruction), void).
 -endif.
@@ -50,36 +50,37 @@ main() ->
 
 % starts the Z-machine with the specified story file
 start(Filename) ->
-    MachinePid = machine:create(memory:read_file(Filename)),
-    Version = machine:rpc(MachinePid, version),
-    run(MachinePid, Version, 0).
+    machine:start_link(zmachine, memory:read_file(Filename),
+				    20000),
+    Version = gen_server:call(zmachine, version),
+    run(zmachine, Version, 0).
 
-run(MachinePid, Version, Num) ->
-    Status = machine:rpc(MachinePid, status),
+run(ServerRef, Version, Num) ->
+    Status = gen_server:call(ServerRef, status),
     if
         Status =:= halt -> halt;
 	Status =:= sread; Status =:= read_char ->
-	    update_status_line(MachinePid, Version),
+	    update_status_line(ServerRef, Version),
 	    % flush the output buffer
-            Output = machine:rpc(MachinePid, get_screen),
+            Output = gen_server:call(ServerRef, get_screen),
             io:fwrite(Output),	    
 	    Input = io:get_line(' '),
 	    Input2 = string:substr(Input, 1, string:len(Input) - 1),
-	    machine:rpc(MachinePid, {send_input, Input2}),
+	    gen_server:call(ServerRef, {send_input, Input2}),
 	    % decode and execute again
-	    decode_and_execute(MachinePid, Version, Num);
+	    decode_and_execute(ServerRef, Version, Num);
         true ->
-	    decode_and_execute(MachinePid, Version, Num + 1)
+	    decode_and_execute(ServerRef, Version, Num + 1)
     end.
 
-update_status_line(MachinePid, Version) when Version =< 3 ->
-    machine:rpc(MachinePid, update_status_line);
+update_status_line(ServerRef, Version) when Version =< 3 ->
+    gen_server:call(ServerRef, update_status_line);
 update_status_line(_, _) -> undef.
     
 
-decode_and_execute(MachinePid, Version, Num) ->
-    Instruction = decode_instr:get_instruction(MachinePid),
+decode_and_execute(ServerRef, Version, Num) ->
+    Instruction = decode_instr:get_instruction(ServerRef),
     ?print_instruction(Instruction),
-    instruction:execute(Instruction, MachinePid),
-    run(MachinePid, Version, Num).
+    instruction:execute(Instruction, ServerRef),
+    run(ServerRef, Version, Num).
  
