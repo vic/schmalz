@@ -125,8 +125,9 @@ decode_variable(ServerRef, Address, Version) ->
     OpcodeByte = ?get_byte(Address),
     OperandCount = variable_operand_count(OpcodeByte),
     OpcodeNum = ?variable_opcode_num(OpcodeByte),
+    IsVx2 = is_vx2(OperandCount, OpcodeNum),
     if
-	OperandCount =:= oc_var, OpcodeNum =:= ?CALL_VS2 ->
+	IsVx2 ->
 	    OperandTypes = extract_operand_types(?get_byte(Address + 1)) ++
 		extract_operand_types(?get_byte(Address + 2)),
 	    OpTypesOffset = 3;
@@ -136,7 +137,13 @@ decode_variable(ServerRef, Address, Version) ->
     end,
     create_var_instruction(ServerRef, Address, Version, OperandCount,
 			   OpcodeNum, OperandTypes, OpTypesOffset).
-	    
+
+% CALL_VS2 and CALL_VN2 are the only instructions which can take up to
+% 8 parameters
+is_vx2(oc_var, ?CALL_VS2) -> true;
+is_vx2(oc_var, ?CALL_VN2) -> true;
+is_vx2(_, _) -> false.
+
 create_var_instruction(ServerRef, Address, Version, OperandCount, OpcodeNum,
 		       OperandTypes, OpTypesOffset) ->
     Operands = extract_operands(ServerRef, Address + OpTypesOffset,
