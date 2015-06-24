@@ -1,0 +1,3 @@
+Schmalz is an Interactive Fiction runtime system in Erlang. The target virtual machines are the Z-machine and Glulx. While the Z-machine was originally created by Infocom to run their famous text adventures, both the Z-machine and Glulx are output formats of the Inform system and therefore run modern Interactive Fiction created in Inform.
+Schmalz is based on experiences made with the Ruby Z-code interpreter "Smeagol" and the Java Z-code interpreter "Z-machine Preservation Project".
+The targeted Z-machine story file versions are 3-5 and 8 which should support the majority of Z-code games available today.
